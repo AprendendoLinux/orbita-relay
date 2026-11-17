@@ -1,0 +1,141 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+var version = "0.1.0"
+
+type App struct {
+	dataDir   string
+	configDir string
+	logDir    string
+	webDir    string
+	key       []byte
+
+	mu       sync.RWMutex
+	db       *pgxpool.Pool
+	settings map[string]any
+
+	setupToken string
+	limiter    *rateLimiter
+}
+
+func env(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeErr(w http.ResponseWriter, code int, msg string) {
+	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		writeErr(w, 400, "corpo inválido")
+		return false
+	}
+	return true
+}
+
+func (a *App) ready() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.db != nil
+}
+
+func (a *App) activate(ctx context.Context, pool *pgxpool.Pool) error {
+	a.mu.Lock()
+	a.db = pool
+	a.settings = map[string]any{}
+	a.mu.Unlock()
+	if err := a.migrate(ctx); err != nil {
+		return err
+	}
+	if err := a.loadSettings(ctx); err != nil {
+		return err
+	}
+	return a.renderMTA(ctx)
+}
+
+func main() {
+	a := &App{
+		dataDir:   env("ORBITA_DATA_DIR", "/data"),
+		configDir: env("ORBITA_CONFIG_DIR", "/config"),
+		logDir:    env("ORBITA_LOG_DIR", "/var/log/exim"),
+		webDir:    env("ORBITA_WEB_DIR", "/app/web"),
+		settings:  map[string]any{},
+		limiter:   newRateLimiter(10, 5*time.Minute),
+	}
+	if err := os.MkdirAll(a.dataDir, 0o700); err != nil {
+		log.Fatal(err)
+	}
+	key, err := loadOrCreateMasterKey(a.dataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	a.key = key
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	dsn := os.Getenv("ORBITA_DATABASE_URL")
+	if dsn == "" {
+		if c, err := a.loadBootstrap(); err == nil {
+			dsn = c.dsn()
+		}
+	}
+	if dsn != "" {
+		pool, err := connectDB(ctx, dsn)
+		if err != nil {
+			log.Printf("banco indisponível: %v (entrando em modo de configuração)", err)
+		} else if err := a.activate(ctx, pool); err != nil {
+			log.Fatalf("falha ao inicializar: %v", err)
+		}
+	}
+	if !a.ready() {
+		_ = a.renderDefaultMTA()
+	}
+	a.setupToken = a.ensureSetupToken()
+
+	go a.runIngest(ctx)
+	go a.runMaintenance(ctx)
+
+	srv := &http.Server{
+		Addr:              env("ORBITA_LISTEN", ":8080"),
+		Handler:           a.routes(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      5 * time.Minute,
+		IdleTimeout:       120 * time.Second,
+	}
+	go func() {
+		<-ctx.Done()
+		sc, c := context.WithTimeout(context.Background(), 10*time.Second)
+		defer c()
+		_ = srv.Shutdown(sc)
+	}()
+	log.Printf("OrbitaRelay v%s ouvindo em %s", version, srv.Addr)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+}
