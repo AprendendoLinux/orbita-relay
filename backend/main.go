@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -28,6 +29,7 @@ type App struct {
 	db       *sql.DB
 	settings map[string]any
 
+	dbFromEnv  bool
 	setupToken string
 	limiter    *rateLimiter
 }
@@ -99,15 +101,25 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	dsn := os.Getenv("ORBITA_DATABASE_URL")
-	if dsn == "" {
-		if c, err := a.loadBootstrap(); err == nil {
-			dsn = c.dsn()
+	if c, ok := dbConfigFromEnv(); ok {
+		a.dbFromEnv = true
+		var pool *sql.DB
+		var err error
+		for i := 0; i < 30; i++ {
+			if pool, err = connectDB(ctx, c.dsn()); err == nil || ctx.Err() != nil {
+				break
+			}
+			log.Printf("aguardando o banco %s:%d (%v)", c.Host, c.Port, err)
+			time.Sleep(2 * time.Second)
 		}
-	}
-	if dsn != "" {
-		pool, err := connectDB(ctx, dsn)
 		if err != nil {
+			log.Fatalf("não foi possível conectar ao banco configurado no docker-compose: %v", err)
+		}
+		if err := a.activate(ctx, pool); err != nil {
+			log.Fatalf("falha ao inicializar: %v", err)
+		}
+	} else if c, err := a.loadBootstrap(); err == nil {
+		if pool, err := connectDB(ctx, c.dsn()); err != nil {
 			log.Printf("banco indisponível: %v (entrando em modo de configuração)", err)
 		} else if err := a.activate(ctx, pool); err != nil {
 			log.Fatalf("falha ao inicializar: %v", err)
@@ -152,4 +164,19 @@ func (a *App) handleBranding(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, out)
+}
+
+func dbConfigFromEnv() (dbConfig, bool) {
+	host := os.Getenv("ORBITA_DB_HOST")
+	if host == "" {
+		return dbConfig{}, false
+	}
+	port, err := strconv.Atoi(env("ORBITA_DB_PORT", "3306"))
+	if err != nil || port < 1 || port > 65535 {
+		port = 3306
+	}
+	return dbConfig{
+		Host: host, Port: port, User: env("ORBITA_DB_USER", "orbita"), Password: os.Getenv("ORBITA_DB_PASSWORD"),
+		Name: env("ORBITA_DB_NAME", "orbita"), SSLMode: env("ORBITA_DB_SSL", "preferred"),
+	}, true
 }

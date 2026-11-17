@@ -67,6 +67,10 @@ func (a *App) handleSetupDB(w http.ResponseWriter, r *http.Request) {
 	if !a.checkSetup(w, r) {
 		return
 	}
+	if a.dbFromEnv {
+		writeErr(w, 403, "o banco é configurado no docker-compose.yml")
+		return
+	}
 	var in dbConfig
 	if !readJSON(w, r, &in) {
 		return

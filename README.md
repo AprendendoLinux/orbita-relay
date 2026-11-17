@@ -14,9 +14,8 @@ docker compose up -d --build
 docker compose logs app | grep TOKEN
 ```
 
-Acesse `http://servidor:8080`, informe o token e conclua o assistente (banco + administrador).
-No banco embutido use host `db`, porta `3306`, usuário/banco `orbita` e a senha de `ORBITA_DB_PASSWORD` (padrão `orbita`; defina em `.env`).
-É possível apontar para um MySQL externo no assistente.
+A conexão com o MySQL (host, porta, banco, usuário, senha, SSL) fica no `docker-compose.yml` (variáveis `ORBITA_DB_*`, com padrões que podem ser sobrescritos em `.env`). **Troque a senha padrão `orbita` antes de usar em produção.**
+Acesse `http://servidor:8080`, informe o token e crie o administrador; em seguida o assistente de configuração abre.
 
 No primeiro login um **assistente** guia a configuração (nome, fuso, modo Relay SMTP ou Smarthost, autenticação, logs); ele pode ser reaberto em Configurações.
 No modo Smarthost o menu Domínios e DKIM fica oculto; no modo Relay SMTP o painel mostra os registros SPF, DKIM e DMARC de cada domínio.
