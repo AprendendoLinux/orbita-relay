@@ -255,6 +255,8 @@ func (a *App) ingestOnce(ctx context.Context, key string, emit sink) error {
 func (a *App) runIngest(ctx context.Context) {
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
+	var lastErr string
+	var lastLog time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -263,8 +265,13 @@ func (a *App) runIngest(ctx context.Context) {
 			if !a.ready() {
 				continue
 			}
-			if err := a.ingestOnce(ctx, "main", a.localSink); err != nil && ctx.Err() == nil {
+			err := a.ingestOnce(ctx, "main", a.localSink)
+			switch {
+			case err == nil:
+				lastErr = ""
+			case ctx.Err() == nil && (err.Error() != lastErr || time.Since(lastLog) > 10*time.Minute):
 				log.Printf("ingestão de logs: %v", err)
+				lastErr, lastLog = err.Error(), time.Now()
 			}
 		}
 	}

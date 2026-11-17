@@ -46,6 +46,9 @@ apply_config() {
 }
 
 start_exim() {
+  for f in main reject panic; do touch "/var/log/exim/$f.log"; done
+  chown Debian-exim:Debian-exim /var/log/exim/*.log
+  chmod 644 /var/log/exim/*.log
   exim4 -bdf -q1m &
   EXIM_PID=$!
   log "exim iniciado (pid $EXIM_PID)"
