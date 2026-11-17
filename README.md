@@ -14,6 +14,18 @@ docker compose up -d
 docker compose logs app | grep TOKEN
 ```
 
+## Containers
+
+| Serviço (compose) | Container e hostname | Função |
+|---|---|---|
+| `db` | `orbitarelay-db` | MySQL |
+| `app` | `orbitarelay-app` | Painel e API (porta 8080) |
+| `mta` | `orbitarelay-mta` | Exim (portas 25 e 587) |
+| `dockerproxy` | `orbitarelay-proxy` | Proxy somente leitura da API do Docker (diagnóstico de IPv6) |
+
+Comandos do compose usam o nome do serviço (`docker compose logs app`); os do Docker usam o nome do container (`docker logs -f orbitarelay-mta`, `docker exec -it orbitarelay-app sh`).
+Com o campo "Hostname do relay (HELO)" vazio, o Exim se apresenta como `orbitarelay-mta`. Em produção, preencha com o nome DNS real do servidor (o mesmo do PTR e do SPF).
+
 A conexão com o MySQL (host, porta, banco, usuário, senha, SSL) fica no `docker-compose.yml` (variáveis `ORBITA_DB_*`). **Troque a senha padrão `orbita` antes de usar em produção.**
 Acesse `http://servidor:8080`, informe o token e crie o administrador; em seguida o assistente de configuração abre.
 
@@ -35,10 +47,10 @@ Segredos ficam criptografados (AES-256-GCM) com a chave `/data/master.key`. **Fa
 O container `mta` publica as portas `25` e `587` (IPv4 e IPv6) em uma rede do compose com IPv6 habilitado. Para o IPv6 funcionar com o IP de origem real, o daemon do Docker precisa estar preparado.
 
 - Em **Configurações > Servidor de e-mail** (modo IP "IPv4 + IPv6") e no assistente, o painel **IPv6 no Docker** detecta a versão do Docker, o IPv6 no daemon e no container, a saída IPv6 e se o IP de origem está sendo mascarado. Quando algo falta, mostra o passo a passo para a sua versão.
-- A versão e o estado do daemon vêm do serviço `dockerproxy` (proxy somente leitura da API do Docker, com acesso apenas a versão, info e redes). Para não usá-lo, remova o serviço e a variável `ORBITA_DOCKER_API` do app; o painel passa a pedir a versão manualmente.
+- A versão e o estado do daemon vêm do serviço `dockerproxy` / `orbitarelay-proxy` (proxy somente leitura da API do Docker, com acesso apenas a versão, info e redes). Para não usá-lo, remova o serviço e a variável `ORBITA_DOCKER_API` do app; o painel passa a pedir a versão manualmente.
 - Resumo: Docker 27 ou mais novo, `{"ipv6": true, "ip6tables": true}` em `/etc/docker/daemon.json`; Docker 26 ou mais antigo, o mesmo mais `"experimental": true`. Depois, `sudo systemctl restart docker` e `docker compose up -d --force-recreate`.
 - **Segurança:** conexões que chegam com o IP do gateway do Docker (origem mascarada) são sempre recusadas, para que uma falha de IPv6 nunca vire open relay. Isso inclui envios feitos a partir do próprio host via `127.0.0.1`; use o IP da máquina.
-- Para manter o IP real sem depender do IPv6 do Docker, use `docker compose -f docker-compose.host.yml up -d` (MTA em `network_mode: host`).
+- Sem IPv6 no Docker, o relay continua funcionando normalmente em IPv4 (modo IP "Somente IPv4" em Configurações).
 
 ## Enviando a partir do próprio servidor (Docker)
 
@@ -64,7 +76,7 @@ Dicas:
 
 - Fixe o IP da máquina (DHCP com reserva ou IP estático); se ele mudar, os envios deixam de funcionar.
 - Outros servidores da rede e containers de outras stacks usam o mesmo IP e porta, sem restrição.
-- Se preferir que `localhost` funcione, use o MTA em modo host: `docker compose -f docker-compose.host.yml up -d`.
+- O `localhost` não é suportado neste modelo de rede; use sempre o IP ou o nome DNS da máquina.
 
 ## Vários servidores (servidor central e clientes)
 

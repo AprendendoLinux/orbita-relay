@@ -109,7 +109,7 @@ export default function Ipv6Panel() {
             </li>
             <li>Volte aqui e clique em <b>Verificar novamente</b>.</li>
           </ol>
-          <span className="help">O servidor também precisa ter um endereço IPv6 global e o encaminhamento ativo (<span className="mono">net.ipv6.conf.all.forwarding=1</span>). Se preferir não depender do IPv6 do Docker, use o <span className="mono">docker-compose.host.yml</span> (MTA em modo host).</span>
+          <span className="help">O servidor também precisa ter um endereço IPv6 global e o encaminhamento ativo (<span className="mono">net.ipv6.conf.all.forwarding=1</span>). Sem IPv6 no Docker, o relay continua funcionando normalmente em IPv4.</span>
         </div>
       )}
       {err && <div className="alert err">{err}</div>}
