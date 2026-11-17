@@ -41,7 +41,7 @@ export default function App() {
       <Route element={<Layout user={user} />}>
         <Route index element={<Dashboard />} />
         <Route path="mensagens" element={<Messages />} />
-        <Route path="conta" element={<Account />} />
+        <Route path="conta" element={user.source === 'local' ? <Account /> : <Navigate to="/" replace />} />
         {admin && (
           <>
             <Route path="dominios" element={smarthost ? <Navigate to="/" replace /> : <Domains />} />

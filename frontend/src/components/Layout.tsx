@@ -51,8 +51,12 @@ export default function Layout({ user }: { user: User }) {
                 <NavLink to="/admin/auditoria">☰ Auditoria</NavLink>
               </>
             )}
-            <div className="sep">Conta</div>
-            <NavLink to="/conta">⚿ Minha conta</NavLink>
+            {user.source === 'local' && (
+              <>
+                <div className="sep">Conta</div>
+                <NavLink to="/conta">⚿ Minha conta</NavLink>
+              </>
+            )}
           </nav>
           <div className="grow" />
           <div className="small muted" style={{ padding: '0 10px' }}>
