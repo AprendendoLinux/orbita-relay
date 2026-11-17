@@ -14,6 +14,7 @@ type Msg = {
   size: number
   status: string
   recipients: string[]
+  direction: string
   node: string
 }
 type Detail = {
@@ -21,7 +22,7 @@ type Detail = {
   deliveries: { at: string; recipient: string; status: string; remote_host: string; remote_ip: string; detail: string }[]
 }
 
-const empty = { q: '', from: '', to: '', status: '', sender: '', recipient: '', host: '', node: '' }
+const empty = { q: '', from: '', to: '', status: '', sender: '', recipient: '', host: '', node: '', direction: '' }
 
 export default function Messages() {
   const { branding } = useBranding()
@@ -73,6 +74,15 @@ export default function Messages() {
               {Object.entries(statusLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
+          {server && (
+            <label className="f">Sentido
+              <select value={f.direction} onChange={set('direction')}>
+                <option value="">Todos</option>
+                <option value="in">Recebidas</option>
+                <option value="out">Enviadas</option>
+              </select>
+            </label>
+          )}
           <label className="f">Remetente<input value={f.sender} onChange={set('sender')} /></label>
           <label className="f">Destinatário<input value={f.recipient} onChange={set('recipient')} /></label>
           <label className="f">Origem (host/IP)<input value={f.host} onChange={set('host')} /></label>
@@ -98,7 +108,7 @@ export default function Messages() {
                 <tr key={m.id} className="click" onClick={() => open(m.id)}>
                   <td className="mono" style={{ whiteSpace: 'nowrap' }}>{fmtDate(m.received_at, tz)}</td>
                   {server && <td className="wrap">{m.node || 'Local'}</td>}
-                  <td className="wrap">{m.sender || '—'}</td>
+                  <td className="wrap">{m.direction === 'in' ? <span title="Recebida" style={{ color: 'var(--cyan, #22d3ee)' }}>↓ </span> : m.direction === 'out' ? <span title="Enviada" style={{ color: 'var(--green, #34d399)' }}>↑ </span> : null}{m.sender || '—'}</td>
                   <td className="wrap">{m.recipients.slice(0, 3).join(', ')}{m.recipients.length > 3 ? ` +${m.recipients.length - 3}` : ''}</td>
                   <td className="wrap">{m.subject || <span className="muted">(sem assunto)</span>}</td>
                   <td className="wrap mono">{m.origin_host && m.origin_host !== m.origin_ip ? `${m.origin_host} ` : ''}{m.origin_ip}</td>

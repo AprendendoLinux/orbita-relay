@@ -16,7 +16,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var version = "1.2.5"
+var version = "1.3.0"
 
 type App struct {
 	dataDir   string
@@ -34,6 +34,7 @@ type App struct {
 	limiter    *rateLimiter
 	collectRL  *rateLimiter
 	push       pushStatus
+	mc         mcState
 }
 
 func env(k, d string) string {
@@ -135,6 +136,7 @@ func main() {
 
 	go a.runIngest(ctx)
 	go a.runPush(ctx)
+	go a.runMailcow(ctx)
 	go a.runMaintenance(ctx)
 
 	srv := &http.Server{
@@ -165,6 +167,9 @@ func (a *App) handleBranding(w http.ResponseWriter, r *http.Request) {
 		out["relay_mode"] = a.sStr("relay_mode")
 		out["deploy_mode"] = a.sStr("deploy_mode")
 		out["auth_mode"] = a.sStr("auth_mode")
+		var mc int
+		_ = a.row(r.Context(), `SELECT count(*) FROM nodes WHERE kind='mailcow'`).Scan(&mc)
+		out["has_mailcow"] = mc > 0
 		out["wizard_done"] = a.sBool("wizard_done")
 	}
 	w.Header().Set("Cache-Control", "no-store")

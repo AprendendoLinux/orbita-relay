@@ -16,8 +16,9 @@ const statusColor: Record<string, string> = {
   failed: 'var(--danger)',
   deferred: 'var(--warning)',
   queued: 'var(--secondary)',
+  accepted: 'var(--primary)',
 }
-const order = ['delivered', 'deferred', 'queued', 'failed']
+const order = ['delivered', 'accepted', 'deferred', 'queued', 'failed']
 
 function BarChart({ series }: { series: Stats['series'] }) {
   const days = useMemo(() => {

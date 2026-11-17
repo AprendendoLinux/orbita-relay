@@ -44,6 +44,7 @@ export type Branding = {
   deploy_mode?: string
   auth_mode?: string
   wizard_done?: boolean
+  has_mailcow?: boolean
 }
 
 export const fmtDate = (iso: string, tz?: string) =>
@@ -55,4 +56,5 @@ export const statusLabel: Record<string, string> = {
   failed: 'Falha',
   deferred: 'Adiada',
   queued: 'Em fila',
+  accepted: 'Aceita',
 }

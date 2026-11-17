@@ -216,6 +216,16 @@ func (a *App) migrate(ctx context.Context) error {
 		{func() bool { return a.hasIndex(ctx, "messages", "uq_node_exim") }, `ALTER TABLE messages ADD UNIQUE KEY uq_node_exim (node_id, exim_id)`},
 		{func() bool { return !a.hasIndex(ctx, "messages", "exim_id") }, `ALTER TABLE messages DROP INDEX exim_id`},
 		{func() bool { return a.hasIndex(ctx, "messages", "messages_node_idx") }, `ALTER TABLE messages ADD INDEX messages_node_idx (node_id, received_at)`},
+		{func() bool { return a.hasColumn(ctx, "messages", "direction") }, `ALTER TABLE messages ADD COLUMN direction VARCHAR(8) NOT NULL DEFAULT ''`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "kind") }, `ALTER TABLE nodes ADD COLUMN kind VARCHAR(12) NOT NULL DEFAULT 'relay'`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "url") }, `ALTER TABLE nodes ADD COLUMN url VARCHAR(255) NOT NULL DEFAULT ''`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "api_key") }, `ALTER TABLE nodes ADD COLUMN api_key TEXT NULL`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "skip_verify") }, `ALTER TABLE nodes ADD COLUMN skip_verify TINYINT(1) NOT NULL DEFAULT 0`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "last_sync") }, `ALTER TABLE nodes ADD COLUMN last_sync DATETIME(6) NULL`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "last_error") }, `ALTER TABLE nodes ADD COLUMN last_error VARCHAR(500) NOT NULL DEFAULT ''`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "sync_v") }, `ALTER TABLE nodes ADD COLUMN sync_v INT NOT NULL DEFAULT 0`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "cur_rspamd") }, `ALTER TABLE nodes ADD COLUMN cur_rspamd BIGINT NOT NULL DEFAULT 0`},
+		{func() bool { return a.hasColumn(ctx, "nodes", "cur_postfix") }, `ALTER TABLE nodes ADD COLUMN cur_postfix BIGINT NOT NULL DEFAULT 0`},
 		{func() bool { return a.hasColumn(ctx, "deliveries", "dk") }, `ALTER TABLE deliveries ADD COLUMN dk BINARY(16) NULL, ADD UNIQUE KEY deliveries_dk (dk)`},
 	}
 	for _, st := range steps {

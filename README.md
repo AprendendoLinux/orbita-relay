@@ -113,6 +113,23 @@ Detalhes:
 - Se o central ficar fora do ar, o cliente retoma do ponto em que parou (cursor no log), sem perdas e sem duplicar eventos.
 - Cada instalação mantém banco e painel próprios. Com HTTP o token trafega sem criptografia.
 
+## Servidores Mailcow
+
+O OrbitaRelay pode registrar as mensagens recebidas e enviadas por servidores [Mailcow](https://mailcow.email), lendo a API deles. Funciona em qualquer modo de implantação e nada é instalado nem alterado no Mailcow.
+
+1. No Mailcow, abra **Sistema > Configuração > Acesso > API** (versões antigas: Configuração > Acesso).
+2. Ative o acesso à API e, em **Permitir acesso à API a partir destes IPs/redes**, informe o IP público do OrbitaRelay.
+3. Gere a **chave de API somente leitura** (nunca use a de leitura e escrita).
+4. No OrbitaRelay, abra **Servidores Mailcow**, informe nome, endereço (`https://mail.exemplo.com.br`) e a chave, use **Testar conexão** e salve.
+
+Como funciona:
+
+- O OrbitaRelay consulta a cada 30 segundos os logs `postfix` e `rspamd-history` (`GET /api/v1/get/logs/...`, cabeçalho `X-API-Key`) e correlaciona as duas fontes pelo ID de fila e pelo `Message-ID`.
+- Cada mensagem aparece em **Mensagens** com o nome do servidor, o sentido (↓ recebida, ↑ enviada), os destinatários e o resultado da entrega (entregue, adiada ou falha). Rejeições do Rspamd aparecem como falha.
+- Sentido: mensagens autenticadas por um usuário do Mailcow contam como enviadas; as demais, como recebidas.
+- A chave de API fica criptografada (AES-256-GCM) no banco. O histórico inicial é limitado ao que o Mailcow mantém nos logs.
+- Se o servidor ficar indisponível, o erro aparece na lista e a coleta continua de onde parou assim que ele voltar, desde que os logs do Mailcow ainda cubram o período.
+
 ## Aparência
 
 Visual futurista único, com alternância entre modo escuro (padrão) e claro, lembrada no navegador.

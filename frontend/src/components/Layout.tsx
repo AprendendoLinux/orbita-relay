@@ -46,6 +46,7 @@ export default function Layout({ user }: { user: User }) {
               <>
                 <div className="sep">Administração</div>
                 {!smarthost && <NavLink to="/dominios">⌖ Domínios e DKIM</NavLink>}
+                <NavLink to="/admin/mailcow">✉ Servidores Mailcow</NavLink>
                 {branding?.deploy_mode === 'server' && <NavLink to="/admin/servidores">⇄ Servidores</NavLink>}
                 <NavLink to="/admin/configuracoes">⚙ Configurações</NavLink>
                 <NavLink to="/assistente">✦ Assistente</NavLink>

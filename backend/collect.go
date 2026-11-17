@@ -268,7 +268,7 @@ func (a *App) nodeAuth(w http.ResponseWriter, r *http.Request) (nodeCtx, bool) {
 	}
 	tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if ok && tok != "" {
-		err := a.row(r.Context(), `SELECT id,name FROM nodes WHERE token_hash=? AND disabled=0`, hashToken(strings.TrimSpace(tok))).Scan(&n.ID, &n.Name)
+		err := a.row(r.Context(), `SELECT id,name FROM nodes WHERE token_hash=? AND disabled=0 AND kind='relay'`, hashToken(strings.TrimSpace(tok))).Scan(&n.ID, &n.Name)
 		if err == nil {
 			_, _ = a.exec(r.Context(), `UPDATE nodes SET last_seen=UTC_TIMESTAMP(6), last_ip=?, version=? WHERE id=?`,
 				trunc(ip, 64), trunc(r.Header.Get("User-Agent"), 32), n.ID)

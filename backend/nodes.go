@@ -22,7 +22,7 @@ type Node struct {
 
 func (a *App) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.query(r.Context(), `SELECT n.id,n.name,n.disabled,n.created_at,n.last_seen,n.last_ip,n.version,
-		(SELECT count(*) FROM messages m WHERE m.node_id=n.id) FROM nodes n ORDER BY n.name`)
+		(SELECT count(*) FROM messages m WHERE m.node_id=n.id) FROM nodes n WHERE n.kind='relay' ORDER BY n.name`)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return

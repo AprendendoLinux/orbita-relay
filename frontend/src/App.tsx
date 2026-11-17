@@ -13,6 +13,7 @@ import Users from './pages/Users'
 import Audit from './pages/Audit'
 import Account from './pages/Account'
 import Nodes from './pages/Nodes'
+import Mailcow from './pages/Mailcow'
 import Wizard from './pages/Wizard'
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="assistente" element={<Wizard first={false} />} />
             <Route path="admin/configuracoes" element={<Settings />} />
             <Route path="admin/servidores" element={branding.deploy_mode === 'server' ? <Nodes /> : <Navigate to="/" replace />} />
+            <Route path="admin/mailcow" element={<Mailcow />} />
             <Route path="admin/usuarios" element={<Users me={user} />} />
             <Route path="admin/auditoria" element={<Audit />} />
           </>

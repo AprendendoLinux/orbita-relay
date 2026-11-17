@@ -109,7 +109,7 @@ td.wrap { word-break: break-word; max-width: 320px; }
 .b-delivered, .b-ok { color: var(--success); border-color: var(--success); }
 .b-failed, .b-bad { color: var(--danger); border-color: var(--danger); }
 .b-deferred, .b-warn { color: var(--warning); border-color: var(--warning); }
-.b-queued, .b-info { color: var(--secondary); border-color: var(--secondary); }
+.b-queued, .b-accepted, .b-info { color: var(--secondary); border-color: var(--secondary); }
 
 .stat { padding: 18px 20px; }
 .stat .v { font-size: 34px; font-weight: 700; line-height: 1.1; text-shadow: 0 0 18px currentColor; }

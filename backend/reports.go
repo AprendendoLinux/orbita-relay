@@ -21,6 +21,7 @@ type msgRow struct {
 	Size       int       `json:"size"`
 	Status     string    `json:"status"`
 	Recipients []string  `json:"recipients"`
+	Direction  string    `json:"direction"`
 	NodeID     int64     `json:"node_id"`
 	Node       string    `json:"node"`
 }
@@ -61,7 +62,10 @@ func (a *App) buildFilter(r *http.Request) (string, []any) {
 	if id, ok := nodeParam(r); ok {
 		conds, args = append(conds, "m.node_id = ?"), append(args, id)
 	}
-	if s := q.Get("status"); s == "queued" || s == "delivered" || s == "failed" || s == "deferred" {
+	if s := q.Get("direction"); s == "in" || s == "out" {
+		conds, args = append(conds, "m.direction = ?"), append(args, s)
+	}
+	if s := q.Get("status"); s == "queued" || s == "accepted" || s == "delivered" || s == "failed" || s == "deferred" {
 		conds, args = append(conds, "m.status = ?"), append(args, s)
 	}
 	if s := strings.TrimSpace(q.Get("sender")); s != "" {
@@ -85,14 +89,14 @@ func (a *App) buildFilter(r *http.Request) (string, []any) {
 	return " WHERE " + strings.Join(conds, " AND "), args
 }
 
-const msgSelect = `SELECT m.id,m.exim_id,m.received_at,m.sender,m.origin_host,m.origin_ip,m.subject,m.size,m.status,
+const msgSelect = `SELECT m.id,m.exim_id,m.received_at,m.sender,m.origin_host,m.origin_ip,m.subject,m.size,m.status,m.direction,
 	COALESCE((SELECT GROUP_CONCAT(DISTINCT d.recipient ORDER BY d.recipient SEPARATOR '\n') FROM deliveries d WHERE d.message_id=m.id),''),
 	m.node_id, COALESCE(n.name,'') FROM messages m LEFT JOIN nodes n ON n.id=m.node_id`
 
 func scanMsg(sc interface{ Scan(...any) error }) (msgRow, error) {
 	var m msgRow
 	var rc string
-	err := sc.Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &rc, &m.NodeID, &m.Node)
+	err := sc.Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &m.Direction, &rc, &m.NodeID, &m.Node)
 	m.Recipients = []string{}
 	if rc != "" {
 		m.Recipients = strings.Split(rc, "\n")
@@ -180,14 +184,14 @@ func (a *App) handleExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="orbitarelay-`+time.Now().Format("20060102-150405")+`.csv"`)
 	_, _ = w.Write([]byte("\xef\xbb\xbf"))
 	cw := csv.NewWriter(w)
-	_ = cw.Write([]string{"Data/Hora", "Servidor", "ID", "Remetente", "Destinatarios", "Assunto", "Status", "Host de origem", "IP de origem", "Tamanho"})
+	_ = cw.Write([]string{"Data/Hora", "Servidor", "Direcao", "ID", "Remetente", "Destinatarios", "Assunto", "Status", "Host de origem", "IP de origem", "Tamanho"})
 	loc := a.location()
 	for rows.Next() {
 		m, err := scanMsg(rows)
 		if err != nil {
 			continue
 		}
-		_ = cw.Write([]string{m.ReceivedAt.In(loc).Format("2006-01-02 15:04:05"), csvSafe(m.Node), m.EximID, csvSafe(m.Sender),
+		_ = cw.Write([]string{m.ReceivedAt.In(loc).Format("2006-01-02 15:04:05"), csvSafe(m.Node), m.Direction, m.EximID, csvSafe(m.Sender),
 			csvSafe(strings.Join(m.Recipients, "; ")), csvSafe(m.Subject), m.Status, csvSafe(m.OriginHost), m.OriginIP, strconv.Itoa(m.Size)})
 	}
 	cw.Flush()
@@ -226,7 +230,7 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 		sign, offSec = "-", -offSec
 	}
 	tz := fmt.Sprintf("%s%02d:%02d", sign, offSec/3600, (offSec%3600)/60)
-	totals := map[string]int{"queued": 0, "delivered": 0, "failed": 0, "deferred": 0}
+	totals := map[string]int{"queued": 0, "accepted": 0, "delivered": 0, "failed": 0, "deferred": 0}
 	type pt struct {
 		Day    string `json:"day"`
 		Status string `json:"status"`

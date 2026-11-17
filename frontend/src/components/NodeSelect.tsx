@@ -3,7 +3,8 @@ import { api } from '../api'
 import { useBranding } from '../branding'
 
 export function useServerMode() {
-  return useBranding().branding?.deploy_mode === 'server'
+  const b = useBranding().branding
+  return b?.deploy_mode === 'server' || !!b?.has_mailcow
 }
 
 export default function NodeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
