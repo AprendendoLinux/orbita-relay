@@ -8,6 +8,7 @@ import FieldInput, { applyChange, type Field, type Vals } from '../components/Fi
 import CollectPanel from '../components/CollectPanel'
 import Tip from '../components/Tip'
 import Ipv6Panel from '../components/Ipv6Panel'
+import HostSendTip from '../components/HostSendTip'
 
 const stepLabels: Record<string, string> = {
   nome: 'Nome', fuso: 'Fuso horário', impl: 'Implantação', central: 'Servidor central',
@@ -188,6 +189,7 @@ export default function Wizard({ first }: { first: boolean }) {
                   {mode === 'relay' && <>{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}</>}
                   {mode === 'smarthost' && <>{F('smarthost_host')}{F('smarthost_port')}{F('smarthost_tls')}{F('smarthost_user')}{F('smarthost_pass')}</>}
                 </div>
+                <HostSendTip />
                 {vals.ip_mode === 'dual' && <Ipv6Panel />}
               </>
             )}

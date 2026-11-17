@@ -47,7 +47,7 @@ O container `mta` publica as portas `25` e `587` (IPv4 e IPv6) em uma rede do co
 Motivo: ao acessar a porta publicada por `localhost`, o Docker encaminha a conexão por um intermediário (`docker-proxy`) e o Exim passa a ver a origem como o gateway da rede do Docker (ex.: `172.28.0.1`), e não `127.0.0.1`. Essa aparência é idêntica à de uma conexão externa com o IP mascarado, então o OrbitaRelay **recusa de propósito** (para nunca virar open relay):
 
 ```
-550 Connection through Docker gateway refused (source IP masked)
+550 Connection through Docker gateway refused (source IP masked); connect using the server IP address instead of localhost
 ```
 
 Como configurar (troque `192.168.0.10` pelo IP da máquina; ele precisa estar em **Redes autorizadas**, e `192.168.0.0/16`, `10.0.0.0/8` e `fd00::/8` já vêm incluídas):

@@ -6,6 +6,7 @@ import FieldInput, { applyChange, visible, type Field, type Vals } from '../comp
 import CollectPanel from '../components/CollectPanel'
 import Tip from '../components/Tip'
 import Ipv6Panel from '../components/Ipv6Panel'
+import HostSendTip from '../components/HostSendTip'
 
 type Resp = { groups: { id: string; label: string }[]; fields: Field[] }
 
@@ -80,6 +81,7 @@ export default function Settings() {
         {current === 'geral' && vals.deploy_mode === 'client' && (
           <Tip title="Cliente">Os dados do servidor central ficam na aba “Envio para o servidor central”.</Tip>
         )}
+        {current === 'mta' && <HostSendTip />}
         {current === 'mta' && vals.ip_mode === 'dual' && <Ipv6Panel />}
         {current === 'coleta' && (
           <>

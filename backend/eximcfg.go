@@ -64,7 +64,7 @@ tls_privatekey = /etc/exim4/tls/key.pem
 begin acl
 
 acl_check_mail:
-{{if .Gateways}}  deny    message = Connection through Docker gateway refused (source IP masked)
+{{if .Gateways}}  deny    message = Connection through Docker gateway refused (source IP masked); connect using the server IP address instead of localhost
           hosts = +docker_gateways
 {{end}}  deny    message = Relay not permitted
           !hosts = +relay_from_hosts
