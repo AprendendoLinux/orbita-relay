@@ -63,6 +63,14 @@ func (a *App) ldapSearchUser(conn *ldap.Conn, username string) (*ldap.Entry, err
 	return res.Entries[0], nil
 }
 
+func (a *App) ldapUPN(username string) string {
+	d := a.sStr("ldap_domain")
+	if d == "" || strings.Contains(username, "@") {
+		return username
+	}
+	return username + d
+}
+
 func (a *App) ldapAuth(username, password string) (ldapInfo, bool) {
 	var info ldapInfo
 	if password == "" || len(username) > 128 {
@@ -74,23 +82,35 @@ func (a *App) ldapAuth(username, password string) (ldapInfo, bool) {
 		return info, false
 	}
 	defer svc.Close()
+	var entry *ldap.Entry
 	if dn := a.sStr("ldap_bind_dn"); dn != "" {
 		if err := svc.Bind(dn, a.sStr("ldap_bind_pass")); err != nil {
 			log.Printf("ldap: bind de serviço falhou: %v", err)
 			return info, false
 		}
-	}
-	entry, err := a.ldapSearchUser(svc, username)
-	if err != nil {
-		return info, false
-	}
-	usr, err := a.ldapDial()
-	if err != nil {
-		return info, false
-	}
-	defer usr.Close()
-	if err := usr.Bind(entry.DN, password); err != nil {
-		return info, false
+		if entry, err = a.ldapSearchUser(svc, username); err != nil {
+			return info, false
+		}
+		usr, err := a.ldapDial()
+		if err != nil {
+			return info, false
+		}
+		defer usr.Close()
+		if err := usr.Bind(entry.DN, password); err != nil {
+			return info, false
+		}
+	} else {
+		upn := a.ldapUPN(username)
+		if !strings.Contains(upn, "@") {
+			log.Printf("ldap: informe o domínio UPN ou um Bind DN")
+			return info, false
+		}
+		if err := svc.Bind(upn, password); err != nil {
+			return info, false
+		}
+		if entry, err = a.ldapSearchUser(svc, strings.SplitN(username, "@", 2)[0]); err != nil {
+			return info, false
+		}
 	}
 	info.name = entry.GetAttributeValue("displayName")
 	if info.name == "" {
@@ -114,5 +134,5 @@ func (a *App) testLDAP() error {
 	if dn := a.sStr("ldap_bind_dn"); dn != "" {
 		return conn.Bind(dn, a.sStr("ldap_bind_pass"))
 	}
-	return conn.UnauthenticatedBind("")
+	return nil
 }

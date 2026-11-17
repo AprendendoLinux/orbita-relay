@@ -63,6 +63,7 @@ var settingFields = []Field{
 	{Key: "ldap_port", Group: "ldap", Label: "Porta", Type: "number", Default: 389, Depends: "auth_mode=ldap"},
 	{Key: "ldap_tls", Group: "ldap", Label: "Criptografia", Type: "select", Default: "none", Options: []string{"none", "starttls", "ldaps"}, Depends: "auth_mode=ldap"},
 	{Key: "ldap_skip_verify", Group: "ldap", Label: "Ignorar validação do certificado", Type: "bool", Default: false, Depends: "auth_mode=ldap"},
+	{Key: "ldap_domain", Group: "ldap", Label: "Domínio UPN (sufixo)", Type: "text", Default: "", Depends: "auth_mode=ldap", Help: "Ex.: @clubenaval.intra. Permite login sem conta de serviço (Bind DN)"},
 	{Key: "ldap_bind_dn", Group: "ldap", Label: "Bind DN (conta de serviço)", Type: "text", Default: "", Depends: "auth_mode=ldap"},
 	{Key: "ldap_bind_pass", Group: "ldap", Label: "Senha do bind", Type: "password", Default: "", Secret: true, Depends: "auth_mode=ldap"},
 	{Key: "ldap_base_dn", Group: "ldap", Label: "Base DN", Type: "text", Default: "", Depends: "auth_mode=ldap"},
@@ -150,6 +151,13 @@ func validateSetting(f *Field, v any) (any, error) {
 		if f.Key == "smarthost_host" {
 			if ip, err := netip.ParseAddr(s); err == nil && ip.Is6() {
 				return nil, errors.New("use o hostname do servidor em vez de um endereço IPv6")
+			}
+		}
+	case "ldap_domain":
+		if s != "" {
+			s = "@" + strings.TrimPrefix(s, "@")
+			if !reHost.MatchString(strings.TrimPrefix(s, "@")) {
+				return nil, errors.New("domínio inválido")
 			}
 		}
 	case "dkim_selector":

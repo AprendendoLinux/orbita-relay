@@ -236,7 +236,10 @@ func (a *App) authenticate(ctx context.Context, username, password string) (int6
 		id, _ = res.LastInsertId()
 		return id, id > 0
 	}
-	_, _ = a.exec(ctx, `UPDATE users SET display_name=?,email=?,role=? WHERE id=?`, info.name, info.mail, role, id)
+	_, _ = a.exec(ctx, `UPDATE users SET display_name=?,email=? WHERE id=?`, info.name, info.mail, id)
+	if info.admin {
+		_, _ = a.exec(ctx, `UPDATE users SET role='admin' WHERE id=?`, id)
+	}
 	return id, true
 }
 
