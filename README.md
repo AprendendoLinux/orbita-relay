@@ -40,6 +40,32 @@ O container `mta` publica as portas `25` e `587` (IPv4 e IPv6) em uma rede do co
 - **Segurança:** conexões que chegam com o IP do gateway do Docker (origem mascarada) são sempre recusadas, para que uma falha de IPv6 nunca vire open relay. Isso inclui envios feitos a partir do próprio host via `127.0.0.1`; use o IP da máquina.
 - Para manter o IP real sem depender do IPv6 do Docker, use `docker compose -f docker-compose.host.yml up -d` (MTA em `network_mode: host`).
 
+## Enviando a partir do próprio servidor (Docker)
+
+**Não use `localhost` nem `127.0.0.1` como servidor SMTP na máquina que roda o Docker.** Use o **endereço IP da própria máquina** (ex.: `192.168.0.10`) ou o nome DNS dela.
+
+Motivo: ao acessar a porta publicada por `localhost`, o Docker encaminha a conexão por um intermediário (`docker-proxy`) e o Exim passa a ver a origem como o gateway da rede do Docker (ex.: `172.28.0.1`), e não `127.0.0.1`. Essa aparência é idêntica à de uma conexão externa com o IP mascarado, então o OrbitaRelay **recusa de propósito** (para nunca virar open relay):
+
+```
+550 Connection through Docker gateway refused (source IP masked)
+```
+
+Como configurar (troque `192.168.0.10` pelo IP da máquina; ele precisa estar em **Redes autorizadas**, e `192.168.0.0/16`, `10.0.0.0/8` e `fd00::/8` já vêm incluídas):
+
+| Cliente | Configuração |
+|---|---|
+| mutt (`~/.muttrc`) | `set smtp_url="smtp://192.168.0.10:25"` |
+| msmtp (`~/.msmtprc`) | `host 192.168.0.10` e `port 25` |
+| swaks | `swaks --server 192.168.0.10 --to destino@exemplo.com` |
+| PHP (`php.ini`) | `SMTP = 192.168.0.10` e `smtp_port = 25` |
+| Aplicações/scripts | servidor `192.168.0.10`, porta `25` (ou `587`) |
+
+Dicas:
+
+- Fixe o IP da máquina (DHCP com reserva ou IP estático); se ele mudar, os envios deixam de funcionar.
+- Outros servidores da rede e containers de outras stacks usam o mesmo IP e porta, sem restrição.
+- Se preferir que `localhost` funcione, use o MTA em modo host: `docker compose -f docker-compose.host.yml up -d`.
+
 ## Vários servidores (servidor central e clientes)
 
 Em Configurações > Geral (ou no assistente) escolha a **implantação**:
