@@ -10,19 +10,21 @@ WORKDIR /src
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
-ARG VERSION=1.2.3
+ARG VERSION=1.2.4
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /orbita .
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata su-exec \
  && adduser -D -u 10001 orbita \
  && mkdir -p /data /config /app/web \
  && chown -R orbita /data /config
 COPY --from=api /orbita /app/orbita
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod 755 /app/entrypoint.sh
 COPY --from=web /web/dist /app/web
-USER orbita
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
-ENTRYPOINT ["/app/orbita"]
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["/app/orbita"]

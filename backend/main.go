@@ -16,7 +16,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var version = "1.2.3"
+var version = "1.2.4"
 
 type App struct {
 	dataDir   string

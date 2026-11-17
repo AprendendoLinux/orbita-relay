@@ -35,6 +35,26 @@ No modo Smarthost o menu Domínios e DKIM fica oculto; no modo Relay SMTP o pain
 Todo o resto (LDAP, domínios, DKIM, smarthost, redes autorizadas, IPv6, retenção) é configurado no painel.
 Segredos ficam criptografados (AES-256-GCM) com a chave `/data/master.key`. **Faça backup do volume `app-data`.**
 
+## Diretórios mapeados (bind mounts)
+
+Em vez de volumes nomeados, você pode mapear diretórios do host, por exemplo:
+
+```yaml
+orbitarelay-app:
+  volumes:
+    - /srv/orbitarelay:/data
+    - /srv/orbitarelay/mta/config:/config
+    - /srv/orbitarelay/mta/logs:/var/log/exim:ro
+```
+
+O Docker cria os diretórios que não existem como `root`. Para isso não causar `open /data/master.key: permission denied`, a imagem do app inicia como root, ajusta as permissões e então passa a rodar como o usuário `orbita` (uid 10001):
+
+- `/data` e `/config` passam a pertencer ao usuário `orbita` (em `/config`, de forma recursiva).
+- Em `/data`, apenas os arquivos da raiz (como `master.key`) são ajustados, **sem recursão**. Assim, subdiretórios de outros serviços dentro do mesmo caminho (como `dbdata` do MySQL e `mta/spool` do Exim) não são alterados.
+- O MySQL e o Exim ajustam os próprios diretórios na inicialização.
+
+Não é necessário rodar `chown` manualmente. Se você iniciar o container com `--user`, o ajuste é ignorado e o diretório precisa já estar com a permissão correta.
+
 ## Logs do Exim
 
 - Exim grava em `/var/log/exim/main.log` (volume `mta-logs`), com `+subject`, TLS e confirmação SMTP.
