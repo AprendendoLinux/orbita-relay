@@ -93,7 +93,7 @@ export default function Ipv6Panel() {
                 <option value="new">27 ou mais nova</option>
                 <option value="old">26 ou mais antiga</option>
               </select>
-              <span className="help">{st.docker.error ? `Não foi possível detectar automaticamente (${st.docker.error}). ` : ''}Mantenha o serviço dockerproxy do compose para detectar a versão sozinho.</span>
+              <span className="help">{st.docker.error ? `Não foi possível detectar automaticamente (${st.docker.error}). ` : ''}Mantenha o serviço orbitarelay-proxy do compose para detectar a versão sozinho.</span>
             </label>
           )}
           <ol>

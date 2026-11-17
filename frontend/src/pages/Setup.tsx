@@ -9,7 +9,7 @@ export default function Setup() {
   const { branding, refresh } = useBranding()
   const [step, setStep] = useState(branding?.db_ready ? 2 : 1)
   const [token, setToken] = useState('')
-  const [db, setDb] = useState({ host: 'db', port: '3306', user: 'orbita', password: '', name: 'orbita', sslmode: 'preferred' })
+  const [db, setDb] = useState({ host: 'orbitarelay-db', port: '3306', user: 'orbita', password: '', name: 'orbita', sslmode: 'preferred' })
   const [adm, setAdm] = useState({ app_name: 'OrbitaRelay', username: 'admin', email: '', password: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -53,7 +53,7 @@ export default function Setup() {
           <div className="steps"><span className="on" /><span className={step === 2 ? 'on' : ''} /></div>
           <h1>Configuração inicial</h1>
           <p className="muted small" style={{ textAlign: 'center', marginTop: -6 }}>
-            O token está nos logs do container: <code className="mono">docker compose logs app</code>
+            O token está nos logs do container: <code className="mono">docker compose logs orbitarelay-app</code>
           </p>
           {step === 1 ? (
             <form className="stack" onSubmit={saveDb}>

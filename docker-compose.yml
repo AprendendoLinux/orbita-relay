@@ -1,9 +1,9 @@
 name: orbitarelay
 
 # Banco de dados (MySQL). SSL: disable | preferred | required | skip-verify
-# Para usar um MySQL externo, altere ORBITA_DB_HOST/PORT e remova o serviço "db" e o depends_on.
+# Para usar um MySQL externo, altere ORBITA_DB_HOST/PORT e remova o serviço "orbitarelay-db" e o depends_on.
 services:
-  db:
+  orbitarelay-db:
     image: mysql:latest
     container_name: orbitarelay-db
     hostname: orbitarelay-db
@@ -23,24 +23,24 @@ services:
       retries: 30
       start_period: 20s
 
-  app:
-    image: ghcr.io/aprendendolinux/orbita-relay-app:1.2.2
+  orbitarelay-app:
+    image: ghcr.io/aprendendolinux/orbita-relay-app:1.2.3
     container_name: orbitarelay-app
     hostname: orbitarelay-app
     restart: unless-stopped
     depends_on:
-      db:
+      orbitarelay-db:
         condition: service_healthy
-      dockerproxy:
+      orbitarelay-proxy:
         condition: service_started
     environment:
-      ORBITA_DB_HOST: db
+      ORBITA_DB_HOST: orbitarelay-db
       ORBITA_DB_PORT: "3306"
       ORBITA_DB_NAME: orbita
       ORBITA_DB_USER: orbita
       ORBITA_DB_PASSWORD: orbita
       ORBITA_DB_SSL: preferred
-      ORBITA_DOCKER_API: http://dockerproxy:2375
+      ORBITA_DOCKER_API: http://orbitarelay-proxy:2375
     ports:
       - "8080:8080"
     volumes:
@@ -49,8 +49,8 @@ services:
       - mta-logs:/var/log/exim:ro
     networks: [orbita]
 
-  mta:
-    image: ghcr.io/aprendendolinux/orbita-relay-mta:1.2.2
+  orbitarelay-mta:
+    image: ghcr.io/aprendendolinux/orbita-relay-mta:1.2.3
     container_name: orbitarelay-mta
     hostname: orbitarelay-mta
     restart: unless-stopped
@@ -68,7 +68,7 @@ services:
 
   # Proxy somente leitura da API do Docker: expõe apenas versão, info e redes, para o painel
   # diagnosticar o IPv6. Para desativar, remova este serviço e a variável ORBITA_DOCKER_API do app.
-  dockerproxy:
+  orbitarelay-proxy:
     image: tecnativa/docker-socket-proxy:0.3.0
     container_name: orbitarelay-proxy
     hostname: orbitarelay-proxy
