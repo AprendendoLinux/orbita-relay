@@ -21,6 +21,8 @@ type msgRow struct {
 	Size       int       `json:"size"`
 	Status     string    `json:"status"`
 	Recipients []string  `json:"recipients"`
+	NodeID     int64     `json:"node_id"`
+	Node       string    `json:"node"`
 }
 
 var likeEsc = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
@@ -30,6 +32,15 @@ func (a *App) location() *time.Location {
 		return l
 	}
 	return time.UTC
+}
+
+func nodeParam(r *http.Request) (int64, bool) {
+	s := r.URL.Query().Get("node")
+	if s == "local" {
+		return 0, true
+	}
+	id, err := strconv.ParseInt(s, 10, 64)
+	return id, err == nil && id > 0
 }
 
 func (a *App) buildFilter(r *http.Request) (string, []any) {
@@ -46,6 +57,9 @@ func (a *App) buildFilter(r *http.Request) (string, []any) {
 		if t, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
 			conds, args = append(conds, "m.received_at < ?"), append(args, t.AddDate(0, 0, 1))
 		}
+	}
+	if id, ok := nodeParam(r); ok {
+		conds, args = append(conds, "m.node_id = ?"), append(args, id)
 	}
 	if s := q.Get("status"); s == "queued" || s == "delivered" || s == "failed" || s == "deferred" {
 		conds, args = append(conds, "m.status = ?"), append(args, s)
@@ -72,12 +86,13 @@ func (a *App) buildFilter(r *http.Request) (string, []any) {
 }
 
 const msgSelect = `SELECT m.id,m.exim_id,m.received_at,m.sender,m.origin_host,m.origin_ip,m.subject,m.size,m.status,
-	COALESCE((SELECT GROUP_CONCAT(DISTINCT d.recipient ORDER BY d.recipient SEPARATOR '\n') FROM deliveries d WHERE d.message_id=m.id),'') FROM messages m`
+	COALESCE((SELECT GROUP_CONCAT(DISTINCT d.recipient ORDER BY d.recipient SEPARATOR '\n') FROM deliveries d WHERE d.message_id=m.id),''),
+	m.node_id, COALESCE(n.name,'') FROM messages m LEFT JOIN nodes n ON n.id=m.node_id`
 
 func scanMsg(sc interface{ Scan(...any) error }) (msgRow, error) {
 	var m msgRow
 	var rc string
-	err := sc.Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &rc)
+	err := sc.Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &rc, &m.NodeID, &m.Node)
 	m.Recipients = []string{}
 	if rc != "" {
 		m.Recipients = strings.Split(rc, "\n")
@@ -165,14 +180,14 @@ func (a *App) handleExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="orbitarelay-`+time.Now().Format("20060102-150405")+`.csv"`)
 	_, _ = w.Write([]byte("\xef\xbb\xbf"))
 	cw := csv.NewWriter(w)
-	_ = cw.Write([]string{"Data/Hora", "ID", "Remetente", "Destinatarios", "Assunto", "Status", "Host de origem", "IP de origem", "Tamanho"})
+	_ = cw.Write([]string{"Data/Hora", "Servidor", "ID", "Remetente", "Destinatarios", "Assunto", "Status", "Host de origem", "IP de origem", "Tamanho"})
 	loc := a.location()
 	for rows.Next() {
 		m, err := scanMsg(rows)
 		if err != nil {
 			continue
 		}
-		_ = cw.Write([]string{m.ReceivedAt.In(loc).Format("2006-01-02 15:04:05"), m.EximID, csvSafe(m.Sender),
+		_ = cw.Write([]string{m.ReceivedAt.In(loc).Format("2006-01-02 15:04:05"), csvSafe(m.Node), m.EximID, csvSafe(m.Sender),
 			csvSafe(strings.Join(m.Recipients, "; ")), csvSafe(m.Subject), m.Status, csvSafe(m.OriginHost), m.OriginIP, strconv.Itoa(m.Size)})
 	}
 	cw.Flush()
@@ -183,9 +198,9 @@ type kv struct {
 	Count int    `json:"count"`
 }
 
-func (a *App) topList(ctx context.Context, q string, days int) []kv {
+func (a *App) topList(ctx context.Context, q string, args ...any) []kv {
 	out := []kv{}
-	rows, err := a.query(ctx, q, days)
+	rows, err := a.query(ctx, q, args...)
 	if err != nil {
 		return out
 	}
@@ -218,8 +233,13 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 		Count  int    `json:"count"`
 	}
 	series := []pt{}
+	nf, nargs := "", []any{}
+	if id, ok := nodeParam(r); ok {
+		nf, nargs = " AND node_id=?", []any{id}
+	}
+	df := strings.ReplaceAll(nf, "node_id", "m.node_id")
 	rows, err := a.query(ctx, `SELECT DATE_FORMAT(CONVERT_TZ(received_at,'+00:00',?),'%Y-%m-%d') AS d, status, count(*)
-		FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) GROUP BY d, status ORDER BY d`, tz, days)
+		FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+nf+` GROUP BY d, status ORDER BY d`, append([]any{tz, days}, nargs...)...)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -234,8 +254,8 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 	rows.Close()
 	writeJSON(w, 200, map[string]any{
 		"days": days, "totals": totals, "series": series,
-		"top_senders":           a.topList(ctx, `SELECT sender_domain, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) AND sender_domain<>'' GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
-		"top_hosts":             a.topList(ctx, `SELECT CASE WHEN origin_host<>'' THEN origin_host ELSE origin_ip END, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
-		"top_recipient_domains": a.topList(ctx, `SELECT SUBSTRING_INDEX(d.recipient,'@',-1), count(*) c FROM deliveries d WHERE d.at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
+		"top_senders":           a.topList(ctx, `SELECT sender_domain, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) AND sender_domain<>''`+nf+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append([]any{days}, nargs...)...),
+		"top_hosts":             a.topList(ctx, `SELECT CASE WHEN origin_host<>'' THEN origin_host ELSE origin_ip END, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+nf+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append([]any{days}, nargs...)...),
+		"top_recipient_domains": a.topList(ctx, `SELECT SUBSTRING_INDEX(d.recipient,'@',-1), count(*) c FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE d.at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+df+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append([]any{days}, nargs...)...),
 	})
 }

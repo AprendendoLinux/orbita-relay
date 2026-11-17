@@ -6,9 +6,11 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -54,6 +56,18 @@ func newRateLimiter(max int, window time.Duration) *rateLimiter {
 	return &rateLimiter{max: max, window: window, hits: map[string][]time.Time{}}
 }
 
+func (l *rateLimiter) over(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := 0
+	for _, t := range l.hits[key] {
+		if time.Since(t) < l.window {
+			n++
+		}
+	}
+	return n >= l.max
+}
+
 func (l *rateLimiter) allow(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -72,7 +86,19 @@ func (l *rateLimiter) allow(key string) bool {
 	return true
 }
 
+var trustProxy atomic.Bool
+
+func (a *App) applyRuntime() { trustProxy.Store(a.sBool("trust_proxy")) }
+
 func clientIP(r *http.Request) string {
+	if trustProxy.Load() {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if ip, err := netip.ParseAddr(strings.TrimSpace(parts[len(parts)-1])); err == nil {
+				return ip.String()
+			}
+		}
+	}
 	h, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

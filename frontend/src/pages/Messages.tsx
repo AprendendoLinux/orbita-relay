@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, fmtDate, statusLabel } from '../api'
 import { useBranding } from '../branding'
+import NodeSelect, { useServerMode } from '../components/NodeSelect'
 
 type Msg = {
   id: number
@@ -13,16 +14,18 @@ type Msg = {
   size: number
   status: string
   recipients: string[]
+  node: string
 }
 type Detail = {
   message: Msg
   deliveries: { at: string; recipient: string; status: string; remote_host: string; remote_ip: string; detail: string }[]
 }
 
-const empty = { q: '', from: '', to: '', status: '', sender: '', recipient: '', host: '' }
+const empty = { q: '', from: '', to: '', status: '', sender: '', recipient: '', host: '', node: '' }
 
 export default function Messages() {
   const { branding } = useBranding()
+  const server = useServerMode()
   const tz = branding?.timezone
   const [f, setF] = useState(empty)
   const [applied, setApplied] = useState(empty)
@@ -73,6 +76,7 @@ export default function Messages() {
           <label className="f">Remetente<input value={f.sender} onChange={set('sender')} /></label>
           <label className="f">Destinatário<input value={f.recipient} onChange={set('recipient')} /></label>
           <label className="f">Origem (host/IP)<input value={f.host} onChange={set('host')} /></label>
+          {server && <NodeSelect value={f.node} onChange={(v) => setF({ ...f, node: v })} />}
         </div>
         <div className="row" style={{ marginTop: 14 }}>
           <button className="primary">Filtrar</button>
@@ -87,12 +91,13 @@ export default function Messages() {
         <div className="tablewrap">
           <table>
             <thead>
-              <tr><th>Data</th><th>Remetente</th><th>Destinatários</th><th>Assunto</th><th>Origem</th><th>Status</th></tr>
+              <tr><th>Data</th>{server && <th>Servidor</th>}<th>Remetente</th><th>Destinatários</th><th>Assunto</th><th>Origem</th><th>Status</th></tr>
             </thead>
             <tbody>
               {data?.items.map((m) => (
                 <tr key={m.id} className="click" onClick={() => open(m.id)}>
                   <td className="mono" style={{ whiteSpace: 'nowrap' }}>{fmtDate(m.received_at, tz)}</td>
+                  {server && <td className="wrap">{m.node || 'Local'}</td>}
                   <td className="wrap">{m.sender || '—'}</td>
                   <td className="wrap">{m.recipients.slice(0, 3).join(', ')}{m.recipients.length > 3 ? ` +${m.recipients.length - 3}` : ''}</td>
                   <td className="wrap">{m.subject || <span className="muted">(sem assunto)</span>}</td>
@@ -100,7 +105,7 @@ export default function Messages() {
                   <td><span className={`badge b-${m.status}`}>{statusLabel[m.status] ?? m.status}</span></td>
                 </tr>
               ))}
-              {data && data.items.length === 0 && <tr><td colSpan={6} className="muted">Nenhuma mensagem encontrada.</td></tr>}
+              {data && data.items.length === 0 && <tr><td colSpan={server ? 7 : 6} className="muted">Nenhuma mensagem encontrada.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -119,6 +124,7 @@ export default function Messages() {
               <button className="sm" onClick={() => setDetail(null)}>Fechar</button>
             </div>
             <div className="stack small">
+              {server && <div><span className="muted">Servidor:</span> {detail.message.node || 'Local'}</div>}
               <div><span className="muted">ID:</span> <span className="mono">{detail.message.exim_id}</span></div>
               <div><span className="muted">Data:</span> {fmtDate(detail.message.received_at, tz)}</div>
               <div><span className="muted">Remetente:</span> {detail.message.sender}</div>

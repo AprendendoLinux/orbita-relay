@@ -4,9 +4,14 @@ import { api } from '../api'
 import { useBranding } from '../branding'
 import { Brand, Footer } from '../components/Layout'
 import ThemeToggle from '../components/ThemeToggle'
-import FieldInput, { type Field, type Vals } from '../components/FieldInput'
+import FieldInput, { applyChange, type Field, type Vals } from '../components/FieldInput'
+import CollectPanel from '../components/CollectPanel'
+import Tip from '../components/Tip'
 
-const steps = ['Nome', 'Fuso horário', 'Modo', 'Autenticação', 'Logs', 'Resumo']
+const stepLabels: Record<string, string> = {
+  nome: 'Nome', fuso: 'Fuso horário', impl: 'Implantação', central: 'Servidor central',
+  modo: 'Modo', auth: 'Autenticação', logs: 'Logs', resumo: 'Resumo',
+}
 const fallbackZones = ['America/Sao_Paulo', 'America/Manaus', 'America/Fortaleza', 'America/Bahia', 'America/Cuiaba', 'America/Rio_Branco', 'America/Noronha', 'UTC']
 
 function zones(): string[] {
@@ -24,6 +29,12 @@ export default function Wizard({ first }: { first: boolean }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const tzList = useMemo(zones, [])
+  const deploy = String(vals.deploy_mode ?? 'standalone')
+  const steps = useMemo(
+    () => ['nome', 'fuso', 'impl', ...(deploy === 'client' ? ['central'] : []), 'modo', 'auth', 'logs', 'resumo'],
+    [deploy],
+  )
+  const cur = steps[step]
 
   useEffect(() => {
     api<{ fields: Field[] }>('/api/admin/settings').then((r) => {
@@ -34,7 +45,7 @@ export default function Wizard({ first }: { first: boolean }) {
 
   const F = (key: string) => {
     const f = fields.find((x) => x.key === key)
-    return f ? <FieldInput key={key} f={f} v={vals[key]} set={(x) => setVals({ ...vals, [key]: x })} /> : null
+    return f ? <FieldInput key={key} f={f} v={vals[key]} set={(x) => setVals(applyChange(vals, key, x))} /> : null
   }
   const set = (k: string, v: unknown) => setVals({ ...vals, [k]: v })
   const mode = String(vals.relay_mode ?? 'relay')
@@ -49,7 +60,7 @@ export default function Wizard({ first }: { first: boolean }) {
       body.wizard_done = true
       await api('/api/admin/settings', { method: 'PUT', body })
       await refresh()
-      nav(mode === 'relay' ? '/dominios' : '/', { replace: true })
+      nav(deploy === 'server' ? '/admin/servidores' : mode === 'relay' ? '/dominios' : '/', { replace: true })
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -61,6 +72,8 @@ export default function Wizard({ first }: { first: boolean }) {
   const summary: [string, string][] = [
     ['Nome do sistema', String(vals.app_name)],
     ['Fuso horário', String(vals.timezone)],
+    ['Implantação', deploy === 'server' ? 'Servidor central' : deploy === 'client' ? 'Cliente' : 'Standalone'],
+    ...(deploy === 'client' ? [['Servidor central', `${vals.collect_scheme}://${vals.collect_host || '—'}:${vals.collect_port}${vals.collect_path ?? ''}`] as [string, string]] : []),
     ['Modo', mode === 'relay' ? 'Relay SMTP (entrega direta)' : `Smarthost (${vals.smarthost_host || '—'}:${vals.smarthost_port})`],
     ['Hostname do relay', String(vals.mta_hostname || '(do container)')],
     ['Autenticação do painel', auth === 'ldap' ? `LDAP/AD (${vals.ldap_host || '—'})` : 'Local'],
@@ -78,24 +91,88 @@ export default function Wizard({ first }: { first: boolean }) {
           <p className="muted small" style={{ marginTop: -6 }}>Passo {step + 1} de {steps.length}. Tudo pode ser alterado depois em Configurações.</p>
           <div className="wiz-steps">
             {steps.map((s, i) => (
-              <span key={s} className={`st ${i === step ? 'on' : i < step ? 'done' : ''}`}>{i < step ? '✓' : i + 1} {s}</span>
+              <span key={s} className={`st ${i === step ? 'on' : i < step ? 'done' : ''}`}>{i < step ? '✓' : i + 1} {stepLabels[s]}</span>
             ))}
           </div>
 
           <div className="stack">
-            {step === 0 && <div className="form-grid">{F('app_name')}</div>}
+            {cur === 'nome' && (
+              <>
+                <Tip>Identifica esta instalação no painel e na aba do navegador. Em um servidor remoto, use um nome que o diferencie (ex.: <b>Filial São Paulo</b>).</Tip>
+                <div className="form-grid">{F('app_name')}</div>
+              </>
+            )}
 
-            {step === 1 && (
+            {cur === 'fuso' && (
+              <>
+              <Tip>Define como datas, horas e gráficos são exibidos. Os dados são sempre armazenados em UTC, então trocar o fuso depois não altera o histórico.</Tip>
               <label className="f" style={{ maxWidth: 420 }}>Fuso horário
                 <select value={String(vals.timezone)} onChange={(e) => set('timezone', e.target.value)}>
                   {tzList.map((z) => <option key={z}>{z}</option>)}
                 </select>
                 <span className="help">Usado em relatórios, gráficos e datas exibidas.</span>
               </label>
+              </>
             )}
 
-            {step === 2 && (
+            {cur === 'impl' && (
               <>
+                <Tip title="Como este sistema será usado?">
+                  Escolha <b>Standalone</b> se há apenas uma instalação. Para consolidar relatórios de vários relays em um só painel, defina um deles como <b>Servidor central</b> e os demais como <b>Clientes</b>. Cada instalação continua completa, com banco e painel próprios.
+                </Tip>
+                <div className="choice">
+                  <button type="button" className={deploy === 'standalone' ? 'on' : ''} onClick={() => set('deploy_mode', 'standalone')}>
+                    <b>Standalone</b><span>Instalação única. Os relatórios mostram apenas este relay.</span>
+                  </button>
+                  <button type="button" className={deploy === 'server' ? 'on' : ''} onClick={() => set('deploy_mode', 'server')}>
+                    <b>Servidor central</b><span>Recebe os eventos de outros relays e unifica os relatórios, com filtro por servidor.</span>
+                  </button>
+                  <button type="button" className={deploy === 'client' ? 'on' : ''} onClick={() => set('deploy_mode', 'client')}>
+                    <b>Cliente</b><span>Envia os eventos deste relay para um servidor central (por HTTP ou HTTPS).</span>
+                  </button>
+                </div>
+                {deploy === 'server' && (
+                  <>
+                    <Tip title="Próximos passos no servidor central">
+                      <ol>
+                        <li>Conclua o assistente e abra o menu <b>Servidores</b>.</li>
+                        <li>Adicione um servidor para cada relay remoto e copie o <b>token</b> gerado (exibido uma única vez).</li>
+                        <li>Os clientes precisam alcançar esta porta pela rede (diretamente ou por um proxy reverso).</li>
+                      </ol>
+                      Se houver um proxy reverso com HTTPS na frente, mantenha este sistema em HTTP interno e marque a opção abaixo.
+                    </Tip>
+                    <div className="form-grid">{F('trust_proxy')}</div>
+                  </>
+                )}
+                {deploy === 'client' && (
+                  <Tip title="Antes de continuar">Você vai precisar do <b>endereço</b> do servidor central e de um <b>token</b>, gerado no menu <b>Servidores</b> dele. O envio só precisa de conexão de saída deste servidor para o central.</Tip>
+                )}
+              </>
+            )}
+
+            {cur === 'central' && (
+              <>
+                <Tip title="Conexão com o servidor central">
+                  <ol>
+                    <li>Escolha o <b>protocolo</b>. Se o central está atrás de um proxy com HTTPS, use <b>HTTPS</b> e porta <b>443</b>.</li>
+                    <li>Informe o <b>endereço</b> (nome ou IP) e a porta. Use o <b>caminho base</b> só se o proxy publicar o sistema em um subcaminho (ex.: <span className="mono">/orbita</span>).</li>
+                    <li>Cole o <b>token</b> gerado no central e clique em <b>Testar conexão</b>.</li>
+                  </ol>
+                  Se o certificado for autoassinado, marque “Ignorar validação do certificado”. Se o central ficar indisponível, os eventos são retidos e enviados depois, sem perdas.
+                </Tip>
+                {vals.collect_scheme === 'http' && <div className="alert warn">Com HTTP o token e os dados trafegam sem criptografia. Use apenas em redes confiáveis.</div>}
+                <div className="form-grid">
+                  {['collect_scheme', 'collect_host', 'collect_port', 'collect_path', 'collect_token', 'collect_skip_verify', 'collect_interval'].map(F)}
+                </div>
+                <CollectPanel vals={vals} live={false} />
+              </>
+            )}
+
+            {cur === 'modo' && (
+              <>
+                <Tip title="Como o relay entrega as mensagens?">
+                  <b>Relay SMTP</b> entrega direto ao destino: exige IP público com DNS reverso e registros SPF, DKIM e DMARC nos seus domínios. <b>Smarthost</b> encaminha por um provedor (Office 365, Gmail, SES…), que cuida da reputação de entrega. Em <b>Redes autorizadas</b>, liste os IPs/redes que podem enviar por este relay.
+                </Tip>
                 <div className="choice">
                   <button type="button" className={mode === 'relay' ? 'on' : ''} onClick={() => set('relay_mode', 'relay')}>
                     <b>Relay SMTP</b><span>Entrega direta aos servidores de destino. Habilita domínios, DKIM, SPF e DMARC.</span>
@@ -113,8 +190,11 @@ export default function Wizard({ first }: { first: boolean }) {
               </>
             )}
 
-            {step === 3 && (
+            {cur === 'auth' && (
               <>
+                <Tip title="Quem pode entrar no painel?">
+                  <b>Local</b> usa usuários criados aqui (o primeiro é o administrador). Com <b>LDAP/AD</b>, os usuários entram com a senha do diretório; informe o <b>Domínio UPN</b> (ex.: <span className="mono">@dominio.local</span>), pois o login é feito como <span className="mono">usuario@dominio</span>. Deixe o grupo vazio para liberar todos os usuários do Base DN.
+                </Tip>
                 <div className="choice">
                   <button type="button" className={auth === 'local' ? 'on' : ''} onClick={() => set('auth_mode', 'local')}>
                     <b>Local</b><span>Usuários e senhas cadastrados no próprio sistema.</span>
@@ -131,14 +211,22 @@ export default function Wizard({ first }: { first: boolean }) {
               </>
             )}
 
-            {step === 4 && <div className="form-grid">{F('db_retention_days')}{F('log_rotate_mb')}{F('log_keep_files')}</div>}
+            {cur === 'logs' && (
+              <>
+                <Tip title="Controle dos logs">
+                  O log do Exim é rotacionado por dia ou ao atingir o tamanho definido, e os arquivos antigos são compactados. A <b>retenção no banco</b> define por quantos dias o histórico de mensagens fica disponível nos relatórios.
+                </Tip>
+                <div className="form-grid">{F('db_retention_days')}{F('log_rotate_mb')}{F('log_keep_files')}</div>
+              </>
+            )}
 
-            {step === 5 && (
+            {cur === 'resumo' && (
               <>
                 <dl className="summary">
                   {summary.map(([k, v]) => (<><dt key={k}>{k}</dt><dd key={k + 'v'}>{v}</dd></>))}
                 </dl>
-                {mode === 'relay' && <div className="alert warn">Próximo passo: cadastrar seus domínios e gerar o DKIM. Os registros SPF e DMARC recomendados serão exibidos lá.</div>}
+                {deploy === 'server' && <div className="alert warn">Próximo passo: cadastrar os relays remotos em Servidores e copiar o token de cada um.</div>}
+                {mode === 'relay' && deploy !== 'server' && <div className="alert warn">Próximo passo: cadastrar seus domínios e gerar o DKIM. Os registros SPF e DMARC recomendados serão exibidos lá.</div>}
                 <span className="help">{label('wizard_done')}: ao concluir, as configurações são salvas e aplicadas ao relay.</span>
               </>
             )}

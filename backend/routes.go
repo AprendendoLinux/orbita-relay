@@ -32,6 +32,9 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("POST /api/auth/login", a.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 
+	mux.HandleFunc("POST /api/collect", a.handleCollect)
+	mux.HandleFunc("GET /api/collect/ping", a.handleCollectPing)
+
 	mux.HandleFunc("GET /api/me", a.auth("viewer", a.handleMe))
 	mux.HandleFunc("POST /api/me/password", a.auth("viewer", a.handleChangePassword))
 	mux.HandleFunc("GET /api/stats", a.auth("viewer", a.handleStats))
@@ -53,6 +56,15 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("PATCH /api/admin/users/{id}", a.auth("admin", a.handleUpdateUser))
 	mux.HandleFunc("DELETE /api/admin/users/{id}", a.auth("admin", a.handleDeleteUser))
 	mux.HandleFunc("GET /api/admin/audit", a.auth("admin", a.handleAudit))
+
+	mux.HandleFunc("GET /api/nodes", a.auth("viewer", a.handleNodeNames))
+	mux.HandleFunc("GET /api/admin/nodes", a.auth("admin", a.handleListNodes))
+	mux.HandleFunc("POST /api/admin/nodes", a.auth("admin", a.handleCreateNode))
+	mux.HandleFunc("PATCH /api/admin/nodes/{id}", a.auth("admin", a.handleUpdateNode))
+	mux.HandleFunc("POST /api/admin/nodes/{id}/token", a.auth("admin", a.handleRotateNode))
+	mux.HandleFunc("DELETE /api/admin/nodes/{id}", a.auth("admin", a.handleDeleteNode))
+	mux.HandleFunc("POST /api/admin/collect/test", a.auth("admin", a.handleCollectTest))
+	mux.HandleFunc("GET /api/admin/collect/status", a.auth("admin", a.handleCollectStatus))
 
 	mux.HandleFunc("GET /api/admin/domains", a.auth("admin", a.handleListDomains))
 	mux.HandleFunc("POST /api/admin/domains", a.auth("admin", a.handleCreateDomain))

@@ -35,6 +35,7 @@ type Group struct {
 
 var settingGroups = []Group{
 	{"geral", "Geral"},
+	{"coleta", "Envio para o servidor central"},
 	{"mta", "Servidor de e-mail"},
 	{"smarthost", "Smarthost"},
 	{"ldap", "Autenticação"},
@@ -44,6 +45,15 @@ var settingGroups = []Group{
 var settingFields = []Field{
 	{Key: "app_name", Group: "geral", Label: "Nome do sistema", Type: "text", Default: "OrbitaRelay"},
 	{Key: "timezone", Group: "geral", Label: "Fuso horário", Type: "text", Default: "America/Sao_Paulo", Help: "Nome IANA, ex.: America/Sao_Paulo"},
+	{Key: "deploy_mode", Group: "geral", Label: "Implantação", Type: "select", Default: "standalone", Options: []string{"standalone", "server", "client"}, Help: "standalone = instalação única; servidor = recebe eventos de outros relays; cliente = envia eventos a um servidor central"},
+	{Key: "trust_proxy", Group: "geral", Label: "Estou atrás de um proxy reverso", Type: "bool", Default: false, Help: "Confia em X-Forwarded-For/Proto para identificar o IP real do cliente. Ative só se um proxy confiável estiver na frente"},
+	{Key: "collect_scheme", Group: "coleta", Label: "Protocolo", Type: "select", Default: "https", Options: []string{"https", "http"}, Depends: "deploy_mode=client", Help: "HTTPS é o recomendado. Com HTTP o token trafega sem criptografia"},
+	{Key: "collect_host", Group: "coleta", Label: "Endereço do servidor central", Type: "text", Default: "", Depends: "deploy_mode=client"},
+	{Key: "collect_port", Group: "coleta", Label: "Porta", Type: "number", Default: 443, Depends: "deploy_mode=client", Help: "443 para HTTPS e 80 para HTTP, ou a porta do seu proxy"},
+	{Key: "collect_path", Group: "coleta", Label: "Caminho base (opcional)", Type: "text", Default: "", Depends: "deploy_mode=client", Help: "Só se o proxy publicar o sistema em um subcaminho"},
+	{Key: "collect_token", Group: "coleta", Label: "Token do servidor", Type: "password", Default: "", Secret: true, Depends: "deploy_mode=client", Help: "Gerado no servidor central, em Servidores"},
+	{Key: "collect_skip_verify", Group: "coleta", Label: "Ignorar validação do certificado (HTTPS)", Type: "bool", Default: false, Depends: "deploy_mode=client", Help: "Use apenas com certificado autoassinado"},
+	{Key: "collect_interval", Group: "coleta", Label: "Intervalo de envio (segundos)", Type: "number", Default: 10, Depends: "deploy_mode=client"},
 	{Key: "relay_mode", Group: "mta", Label: "Modo de operação", Type: "select", Default: "relay", Options: []string{"relay", "smarthost"}, Help: "relay = entrega direta (domínios, DKIM, SPF, DMARC); smarthost = encaminha por outro servidor SMTP"},
 	{Key: "mta_hostname", Group: "mta", Label: "Hostname do relay (HELO)", Type: "text", Default: "", Help: "Vazio usa o hostname do container"},
 	{Key: "relay_nets", Group: "mta", Label: "Redes autorizadas a enviar", Type: "textarea", Default: "127.0.0.1\n::1\n10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\nfd00::/8", Help: "Um IP ou CIDR (IPv4/IPv6) por linha"},
@@ -76,11 +86,12 @@ var settingFields = []Field{
 }
 
 var (
-	reHost   = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
-	reDomain = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
-	reSel    = regexp.MustCompile(`^[A-Za-z0-9-]{1,32}$`)
-	reEmail  = regexp.MustCompile(`^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$`)
-	reNoCtrl = regexp.MustCompile(`^[^\x00-\x08\x0a-\x1f\x7f]*$`)
+	reHost    = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
+	reDomain  = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
+	reSel     = regexp.MustCompile(`^[A-Za-z0-9-]{1,32}$`)
+	reEmail   = regexp.MustCompile(`^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$`)
+	reURLPath = regexp.MustCompile(`^(/[A-Za-z0-9._~-]+)+$`)
+	reNoCtrl  = regexp.MustCompile(`^[^\x00-\x08\x0a-\x1f\x7f]*$`)
 )
 
 var fieldExamples = map[string]string{
@@ -91,6 +102,7 @@ var fieldExamples = map[string]string{
 	"ldap_host": "ad.dominio.local ou 192.168.0.10", "ldap_port": "389 (LDAP) ou 636 (LDAPS)", "ldap_domain": "@dominio.local",
 	"ldap_base_dn": "DC=dominio,DC=local", "ldap_user_filter": "(sAMAccountName=%s)",
 	"ldap_group_dn": "CN=GrupoAcesso,CN=Users,DC=dominio,DC=local", "ldap_admin_group_dn": "CN=Administradores,CN=Users,DC=dominio,DC=local",
+	"collect_host": "orbita.dominio.com.br", "collect_port": "443", "collect_path": "/orbita", "collect_interval": "10",
 	"db_retention_days": "365", "log_rotate_mb": "50", "log_keep_files": "7",
 }
 
@@ -134,6 +146,9 @@ func validateSetting(f *Field, v any) (any, error) {
 		if n < 0 || n > 1_000_000 || n != float64(int(n)) {
 			return nil, errors.New("número fora do intervalo")
 		}
+		if (f.Key == "collect_port" && (n < 1 || n > 65535)) || (f.Key == "collect_interval" && (n < 2 || n > 3600)) {
+			return nil, errors.New("valor fora do intervalo permitido")
+		}
 		return int(n), nil
 	case "select":
 		s, _ := v.(string)
@@ -158,7 +173,7 @@ func validateSetting(f *Field, v any) (any, error) {
 		}
 	}
 	switch f.Key {
-	case "mta_hostname", "smarthost_host", "ldap_host":
+	case "mta_hostname", "smarthost_host", "ldap_host", "collect_host":
 		if s != "" && !reHost.MatchString(s) {
 			if _, err := netip.ParseAddr(s); err != nil {
 				return nil, errors.New("hostname inválido")
@@ -167,6 +182,13 @@ func validateSetting(f *Field, v any) (any, error) {
 		if f.Key == "smarthost_host" {
 			if ip, err := netip.ParseAddr(s); err == nil && ip.Is6() {
 				return nil, errors.New("use o hostname do servidor em vez de um endereço IPv6")
+			}
+		}
+	case "collect_path":
+		if s != "" {
+			s = "/" + strings.Trim(s, "/")
+			if !reURLPath.MatchString(s) {
+				return nil, errors.New("caminho inválido")
 			}
 		}
 	case "ldap_domain":
@@ -242,6 +264,7 @@ func (a *App) loadSettings(ctx context.Context) error {
 	a.mu.Lock()
 	a.settings = m
 	a.mu.Unlock()
+	a.applyRuntime()
 	return rows.Err()
 }
 
@@ -348,6 +371,7 @@ func (a *App) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	a.applyRuntime()
 	u := userFrom(r)
 	a.audit(r.Context(), u.Username, "settings.update", fmt.Sprintf("%d campos", len(in)))
 	if err := a.renderMTA(r.Context()); err != nil {

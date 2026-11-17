@@ -8,7 +8,19 @@ const optionLabels: Record<string, string> = {
   relay: 'Relay SMTP (entrega direta)', smarthost: 'Smarthost (encaminhar)',
   local: 'Local', ldap: 'LDAP / Active Directory',
   none: 'Nenhuma', starttls: 'STARTTLS', tls: 'TLS implícito (SMTPS)', ldaps: 'LDAPS',
+  standalone: 'Standalone (instalação única)', server: 'Servidor central (recebe de outros relays)', client: 'Cliente (envia a um servidor central)',
+  https: 'HTTPS (recomendado)', http: 'HTTP (sem criptografia)',
   dual: 'IPv4 + IPv6', ipv4: 'Somente IPv4', quarantine: 'quarantine', reject: 'reject',
+}
+
+export const applyChange = (vals: Vals, key: string, x: unknown): Vals => {
+  const next = { ...vals, [key]: x }
+  if (key === 'collect_scheme') {
+    const p = Number(vals.collect_port)
+    if (x === 'http' && p === 443) next.collect_port = 80
+    if (x === 'https' && p === 80) next.collect_port = 443
+  }
+  return next
 }
 
 export const visible = (f: Field, vals: Vals) => {

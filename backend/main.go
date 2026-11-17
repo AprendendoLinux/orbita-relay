@@ -16,7 +16,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var version = "1.0.0"
+var version = "1.1.0"
 
 type App struct {
 	dataDir   string
@@ -32,6 +32,8 @@ type App struct {
 	dbFromEnv  bool
 	setupToken string
 	limiter    *rateLimiter
+	collectRL  *rateLimiter
+	push       pushStatus
 }
 
 func env(k, d string) string {
@@ -88,6 +90,7 @@ func main() {
 		webDir:    env("ORBITA_WEB_DIR", "/app/web"),
 		settings:  map[string]any{},
 		limiter:   newRateLimiter(10, 5*time.Minute),
+		collectRL: newRateLimiter(10, 5*time.Minute),
 	}
 	if err := os.MkdirAll(a.dataDir, 0o700); err != nil {
 		log.Fatal(err)
@@ -131,6 +134,7 @@ func main() {
 	a.setupToken = a.ensureSetupToken()
 
 	go a.runIngest(ctx)
+	go a.runPush(ctx)
 	go a.runMaintenance(ctx)
 
 	srv := &http.Server{
@@ -159,6 +163,7 @@ func (a *App) handleBranding(w http.ResponseWriter, r *http.Request) {
 		out["app_name"] = a.sStr("app_name")
 		out["timezone"] = a.sStr("timezone")
 		out["relay_mode"] = a.sStr("relay_mode")
+		out["deploy_mode"] = a.sStr("deploy_mode")
 		out["auth_mode"] = a.sStr("auth_mode")
 		out["wizard_done"] = a.sBool("wizard_done")
 	}

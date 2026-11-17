@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useBranding } from '../branding'
-import FieldInput, { visible, type Field, type Vals } from '../components/FieldInput'
+import FieldInput, { applyChange, visible, type Field, type Vals } from '../components/FieldInput'
+import CollectPanel from '../components/CollectPanel'
+import Tip from '../components/Tip'
 
 type Resp = { groups: { id: string; label: string }[]; fields: Field[] }
 
@@ -68,9 +70,21 @@ export default function Settings() {
       <div className="glass card stack">
         <div className="form-grid">
           {fields.map((f) => (
-            <FieldInput key={f.key} f={f} v={vals[f.key]} set={(x) => setVals({ ...vals, [f.key]: x })} />
+            <FieldInput key={f.key} f={f} v={vals[f.key]} set={(x) => setVals(applyChange(vals, f.key, x))} />
           ))}
         </div>
+        {current === 'geral' && vals.deploy_mode === 'server' && (
+          <Tip title="Servidor central">Cadastre cada relay remoto em <Link to="/admin/servidores">Servidores</Link> para gerar o token dele. Se este sistema estiver atrás de um proxy com HTTPS, ative “Estou atrás de um proxy reverso”.</Tip>
+        )}
+        {current === 'geral' && vals.deploy_mode === 'client' && (
+          <Tip title="Cliente">Os dados do servidor central ficam na aba “Envio para o servidor central”.</Tip>
+        )}
+        {current === 'coleta' && (
+          <>
+            {vals.collect_scheme === 'http' && <div className="alert warn">Com HTTP o token e os dados trafegam sem criptografia. Use apenas em redes confiáveis.</div>}
+            <CollectPanel vals={vals} />
+          </>
+        )}
         {msg && <div className={`alert ${msg.t}`} role="status">{msg.s}</div>}
         <div className="row">
           <button className="primary" onClick={save} disabled={busy}>{busy ? 'Salvando…' : 'Salvar'}</button>

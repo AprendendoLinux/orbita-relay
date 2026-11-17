@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, statusLabel } from '../api'
+import NodeSelect, { useServerMode } from '../components/NodeSelect'
 
 type Stats = {
   days: number
@@ -84,24 +85,29 @@ function Top({ title, items }: { title: string; items: { key: string; count: num
 }
 
 export default function Dashboard() {
+  const server = useServerMode()
+  const [node, setNode] = useState('')
   const [days, setDays] = useState(7)
   const [s, setS] = useState<Stats | null>(null)
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    api<Stats>(`/api/stats?days=${days}`).then(setS).catch((e) => setErr((e as Error).message))
-  }, [days])
+    api<Stats>(`/api/stats?days=${days}${node ? `&node=${node}` : ''}`).then(setS).catch((e) => setErr((e as Error).message))
+  }, [days, node])
 
   const total = s ? Object.values(s.totals).reduce((a, b) => a + b, 0) : 0
   return (
     <>
       <div className="topbar">
         <h1>Painel</h1>
+        <div className="row">
+        {server && <NodeSelect value={node} onChange={setNode} />}
         <label className="f" style={{ width: 170 }}>
           <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Período">
             {[1, 7, 30, 90, 365].map((d) => <option key={d} value={d}>Últimos {d} {d === 1 ? 'dia' : 'dias'}</option>)}
           </select>
         </label>
+        </div>
       </div>
       {err && <div className="alert err">{err}</div>}
       {s && (

@@ -41,6 +41,7 @@ export type Branding = {
   app_name: string
   timezone?: string
   relay_mode?: string
+  deploy_mode?: string
   auth_mode?: string
   wizard_done?: boolean
 }

@@ -170,6 +170,16 @@ var schema = []string{
 	  inode BIGINT NOT NULL DEFAULT 0,
 	  pos BIGINT NOT NULL DEFAULT 0
 	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS nodes (
+	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	  name VARCHAR(80) NOT NULL UNIQUE,
+	  token_hash CHAR(64) NOT NULL UNIQUE,
+	  disabled TINYINT(1) NOT NULL DEFAULT 0,
+	  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	  last_seen DATETIME(6) NULL,
+	  last_ip VARCHAR(64) NOT NULL DEFAULT '',
+	  version VARCHAR(32) NOT NULL DEFAULT ''
+	) DEFAULT CHARSET=utf8mb4`,
 	`CREATE TABLE IF NOT EXISTS audit_log (
 	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
 	  at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -180,9 +190,39 @@ var schema = []string{
 	) DEFAULT CHARSET=utf8mb4`,
 }
 
+func (a *App) hasColumn(ctx context.Context, table, col string) bool {
+	var n int
+	_ = a.row(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?`, table, col).Scan(&n)
+	return n > 0
+}
+
+func (a *App) hasIndex(ctx context.Context, table, idx string) bool {
+	var n int
+	_ = a.row(ctx, `SELECT count(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=? AND index_name=?`, table, idx).Scan(&n)
+	return n > 0
+}
+
 func (a *App) migrate(ctx context.Context) error {
 	for _, s := range schema {
 		if _, err := a.exec(ctx, s); err != nil {
+			return err
+		}
+	}
+	steps := []struct {
+		ok  func() bool
+		sql string
+	}{
+		{func() bool { return a.hasColumn(ctx, "messages", "node_id") }, `ALTER TABLE messages ADD COLUMN node_id BIGINT NOT NULL DEFAULT 0 AFTER id`},
+		{func() bool { return a.hasIndex(ctx, "messages", "uq_node_exim") }, `ALTER TABLE messages ADD UNIQUE KEY uq_node_exim (node_id, exim_id)`},
+		{func() bool { return !a.hasIndex(ctx, "messages", "exim_id") }, `ALTER TABLE messages DROP INDEX exim_id`},
+		{func() bool { return a.hasIndex(ctx, "messages", "messages_node_idx") }, `ALTER TABLE messages ADD INDEX messages_node_idx (node_id, received_at)`},
+		{func() bool { return a.hasColumn(ctx, "deliveries", "dk") }, `ALTER TABLE deliveries ADD COLUMN dk BINARY(16) NULL, ADD UNIQUE KEY deliveries_dk (dk)`},
+	}
+	for _, st := range steps {
+		if st.ok() {
+			continue
+		}
+		if _, err := a.exec(ctx, st.sql); err != nil {
 			return err
 		}
 	}

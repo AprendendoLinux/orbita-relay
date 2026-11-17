@@ -36,6 +36,21 @@ O container `mta` usa `network_mode: host`: escuta em `0.0.0.0` e `::` nas porta
 A rede interna do compose também tem IPv6 habilitado. Modo `ipv4` disponível em Configurações > Relay SMTP.
 Requer que a porta 25 do host esteja livre.
 
+## Vários servidores (servidor central e clientes)
+
+Em Configurações > Geral (ou no assistente) escolha a **implantação**:
+
+- **Standalone:** instalação única.
+- **Servidor central:** recebe os eventos de outros relays. Cadastre cada um em **Servidores** para gerar um token (exibido uma única vez). Dashboard, mensagens e CSV ganham o filtro por servidor.
+- **Cliente:** envia os eventos deste relay ao servidor central (modo push; só precisa de conexão de saída). Informe protocolo (HTTP ou HTTPS), endereço, porta, caminho base opcional e o token, e use **Testar conexão**.
+
+Detalhes:
+
+- Atrás de proxy reverso com HTTPS: o central continua em HTTP interno; no cliente use HTTPS/443 (e o caminho base, se houver). No central ative "Estou atrás de um proxy reverso" para registrar o IP real.
+- Certificado autoassinado: opção "Ignorar validação do certificado" no cliente.
+- Se o central ficar fora do ar, o cliente retoma do ponto em que parou (cursor no log), sem perdas e sem duplicar eventos.
+- Cada instalação mantém banco e painel próprios. Com HTTP o token trafega sem criptografia.
+
 ## Aparência
 
 Visual futurista único, com alternância entre modo escuro (padrão) e claro, lembrada no navegador.
