@@ -5,6 +5,8 @@ name: orbitarelay
 services:
   db:
     image: mysql:latest
+    container_name: orbitarelay-db
+    hostname: orbitarelay-db
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: orbita
@@ -23,6 +25,8 @@ services:
 
   app:
     image: ghcr.io/aprendendolinux/orbita-relay-app:1.2.1
+    container_name: orbitarelay-app
+    hostname: orbitarelay-app
     restart: unless-stopped
     depends_on:
       db:
@@ -47,6 +51,8 @@ services:
 
   mta:
     image: ghcr.io/aprendendolinux/orbita-relay-mta:1.2.1
+    container_name: orbitarelay-mta
+    hostname: orbitarelay-mta
     restart: unless-stopped
     ports:
       - "25:25"
@@ -64,6 +70,8 @@ services:
   # diagnosticar o IPv6. Para desativar, remova este serviço e a variável ORBITA_DOCKER_API do app.
   dockerproxy:
     image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: orbitarelay-proxy
+    hostname: orbitarelay-proxy
     restart: unless-stopped
     environment:
       VERSION: "1"
