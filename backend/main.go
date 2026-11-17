@@ -139,3 +139,13 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
+func (a *App) handleBranding(w http.ResponseWriter, r *http.Request) {
+	out := map[string]any{"version": version, "setup_required": !a.setupDone(), "db_ready": a.ready(), "app_name": "OrbitaRelay"}
+	if a.ready() {
+		out["app_name"] = a.sStr("app_name")
+		out["timezone"] = a.sStr("timezone")
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, out)
+}

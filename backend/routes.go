@@ -54,13 +54,6 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/admin/users/{id}", a.auth("admin", a.handleDeleteUser))
 	mux.HandleFunc("GET /api/admin/audit", a.auth("admin", a.handleAudit))
 
-	mux.HandleFunc("GET /api/admin/themes", a.auth("admin", a.handleListThemes))
-	mux.HandleFunc("POST /api/admin/themes", a.auth("admin", a.handleCreateTheme))
-	mux.HandleFunc("PUT /api/admin/themes/{slug}", a.auth("admin", a.handleUpdateTheme))
-	mux.HandleFunc("DELETE /api/admin/themes/{slug}", a.auth("admin", a.handleDeleteTheme))
-	mux.HandleFunc("POST /api/admin/themes/{slug}/activate", a.auth("admin", a.handleActivateTheme))
-	mux.HandleFunc("POST /api/admin/themes/{slug}/logo", a.auth("admin", a.handleThemeLogo))
-	mux.HandleFunc("DELETE /api/admin/themes/{slug}/logo", a.auth("admin", a.handleDeleteThemeLogo))
 
 	mux.HandleFunc("GET /api/admin/domains", a.auth("admin", a.handleListDomains))
 	mux.HandleFunc("POST /api/admin/domains", a.auth("admin", a.handleCreateDomain))
@@ -69,7 +62,6 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("PUT /api/admin/domains/{id}/dkim", a.auth("admin", a.handleToggleDKIM))
 	mux.HandleFunc("GET /api/admin/domains/{id}/check", a.auth("admin", a.handleCheckDomain))
 
-	mux.HandleFunc("GET /uploads/{name}", a.handleUploads)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"ok": true, "version": version}) })
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { writeErr(w, 404, "não encontrado") })
 	mux.HandleFunc("GET /", a.serveSPA)

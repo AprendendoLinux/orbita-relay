@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api, roleLabel, type User } from '../api'
 import { useBranding } from '../branding'
+import Logo from './Logo'
+import ThemeToggle from './ThemeToggle'
 
 export function Footer() {
   const { branding } = useBranding()
@@ -12,12 +14,11 @@ export function Footer() {
   )
 }
 
-export function Brand() {
+export function Brand({ size = 40 }: { size?: number }) {
   const { branding } = useBranding()
-  const logo = branding?.theme.logo
   return (
     <div className="brand">
-      {logo ? <img src={logo} alt="" /> : <span className="dot" />}
+      <Logo size={size} />
       <span>{branding?.app_name ?? 'OrbitaRelay'}</span>
     </div>
   )
@@ -43,7 +44,6 @@ export default function Layout({ user }: { user: User }) {
                 <div className="sep">Administração</div>
                 <NavLink to="/dominios">⌖ Domínios e DKIM</NavLink>
                 <NavLink to="/admin/configuracoes">⚙ Configurações</NavLink>
-                <NavLink to="/admin/temas">◐ Temas</NavLink>
                 <NavLink to="/admin/usuarios">☺ Usuários</NavLink>
                 <NavLink to="/admin/auditoria">☰ Auditoria</NavLink>
               </>
@@ -57,6 +57,7 @@ export default function Layout({ user }: { user: User }) {
             <br />
             {roleLabel[user.role]}
           </div>
+          <ThemeToggle />
           <button className="sm" onClick={logout}>Sair</button>
         </aside>
         <div className="main">

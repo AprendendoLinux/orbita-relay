@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { api } from '../api'
 import { Footer } from '../components/Layout'
 import { useBranding } from '../branding'
+import Logo from '../components/Logo'
+import ThemeToggle from '../components/ThemeToggle'
 
 export default function Setup() {
   const { branding, refresh } = useBranding()
@@ -44,8 +46,10 @@ export default function Setup() {
 
   return (
     <>
+      <div className="floating-toggle"><ThemeToggle /></div>
       <div className="center">
         <div className="auth glass" style={{ maxWidth: 520 }}>
+          <div className="logo"><Logo size={72} /></div>
           <div className="steps"><span className="on" /><span className={step === 2 ? 'on' : ''} /></div>
           <h1>Configuração inicial</h1>
           <p className="muted small" style={{ textAlign: 'center', marginTop: -6 }}>

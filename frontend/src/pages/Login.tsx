@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { api } from '../api'
-import { Brand, Footer } from '../components/Layout'
+import { Footer } from '../components/Layout'
 import { useBranding } from '../branding'
+import Logo from '../components/Logo'
+import ThemeToggle from '../components/ThemeToggle'
 
 export default function Login() {
   const { branding } = useBranding()
@@ -25,13 +27,10 @@ export default function Login() {
 
   return (
     <>
+      <div className="floating-toggle"><ThemeToggle /></div>
       <div className="center">
         <form className="auth glass" onSubmit={submit}>
-          {branding?.theme.logo ? (
-            <div className="logo"><img src={branding.theme.logo} alt="" /></div>
-          ) : (
-            <Brand />
-          )}
+          <div className="logo"><Logo size={84} /></div>
           <h1>{branding?.app_name}</h1>
           <p className="muted small" style={{ textAlign: 'center', marginTop: -6 }}>Acesse com suas credenciais</p>
           <div className="stack">

@@ -20,7 +20,6 @@ RUN apk add --no-cache ca-certificates tzdata \
  && chown -R orbita /data /config
 COPY --from=api /orbita /app/orbita
 COPY --from=web /web/dist /app/web
-COPY web-static/ /app/web/static/
 USER orbita
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1

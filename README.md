@@ -3,7 +3,7 @@
 Relay SMTP (Exim) + painel de relatórios, unificando `clubenaval/relatorios-smtp` e `AprendendoLinux/exim-relay`.
 
 - **Backend:** Go (API, ingestão de logs, gerador de config do Exim)
-- **Frontend:** React + TypeScript (Vite), temas via CSS variables
+- **Frontend:** React + TypeScript (Vite), visual futurista com modo claro/escuro
 - **Banco:** PostgreSQL
 - **MTA:** Exim 4.96 com configuração gerada pelo painel
 
@@ -18,7 +18,7 @@ Acesse `http://servidor:8080`, informe o token e conclua o assistente (banco + a
 No banco embutido use host `db`, usuário/banco `orbita` e a senha de `ORBITA_DB_PASSWORD` (padrão `orbita`; defina em `.env`).
 É possível apontar para um PostgreSQL externo no assistente.
 
-Todo o resto (LDAP, domínios, DKIM, smarthost, redes autorizadas, IPv6, retenção, temas) é configurado no painel.
+Todo o resto (LDAP, domínios, DKIM, smarthost, redes autorizadas, IPv6, retenção) é configurado no painel.
 Segredos ficam criptografados (AES-256-GCM) com a chave `/data/master.key`. **Faça backup do volume `app-data`.**
 
 ## Logs do Exim
@@ -34,10 +34,9 @@ O container `mta` usa `network_mode: host`: escuta em `0.0.0.0` e `::` nas porta
 A rede interna do compose também tem IPv6 habilitado. Modo `ipv4` disponível em Configurações > Relay SMTP.
 Requer que a porta 25 do host esteja livre.
 
-## Temas
+## Aparência
 
-Padrão **Clube Naval** (vermelho `#C8102E`/azul-marinho, logo incluído), além de *Orbita Neon* e *Aurora Verde*.
-Temas padrão são imutáveis: duplique para editar cores, fonte, vidro/brilho e trocar o logotipo.
+Visual futurista único, com alternância entre modo escuro (padrão) e claro, lembrada no navegador.
 
 ## Perfis
 
@@ -46,10 +45,9 @@ Temas padrão são imutáveis: duplique para editar cores, fonte, vidro/brilho e
 ## Estrutura
 
 ```
-backend/   API Go (auth, settings, themes, domains/DKIM, eximcfg, ingest, reports)
+backend/   API Go (auth, settings, domains/DKIM, eximcfg, ingest, reports)
 frontend/  Painel React
 mta/       Imagem do Exim + entrypoint (aplica config, recarrega, rotaciona logs)
-web-static/ Logo do tema Clube Naval
 ```
 
 ## Roadmap

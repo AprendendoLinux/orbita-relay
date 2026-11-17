@@ -105,15 +105,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at timestamptz NOT NULL,
   ip text NOT NULL DEFAULT ''
 );
-CREATE TABLE IF NOT EXISTS themes (
-  id bigserial PRIMARY KEY,
-  slug text NOT NULL UNIQUE,
-  name text NOT NULL,
-  builtin boolean NOT NULL DEFAULT false,
-  tokens jsonb NOT NULL,
-  logo text NOT NULL DEFAULT '',
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+DROP TABLE IF EXISTS themes;
 CREATE TABLE IF NOT EXISTS domains (
   id bigserial PRIMARY KEY,
   domain text NOT NULL UNIQUE,
@@ -173,7 +165,7 @@ func (a *App) migrate(ctx context.Context) error {
 	_, _ = a.db.Exec(ctx, `CREATE INDEX IF NOT EXISTS messages_subject_trgm ON messages USING gin (subject gin_trgm_ops)`)
 	_, _ = a.db.Exec(ctx, `CREATE INDEX IF NOT EXISTS messages_sender_trgm ON messages USING gin (sender gin_trgm_ops)`)
 	_, _ = a.db.Exec(ctx, `CREATE INDEX IF NOT EXISTS deliveries_recipient_trgm ON deliveries USING gin (recipient gin_trgm_ops)`)
-	return a.seedThemes(ctx)
+	return nil
 }
 
 func (a *App) audit(ctx context.Context, user, action, detail string) {

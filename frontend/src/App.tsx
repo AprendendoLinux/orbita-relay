@@ -9,7 +9,6 @@ import Dashboard from './pages/Dashboard'
 import Messages from './pages/Messages'
 import Domains from './pages/Domains'
 import Settings from './pages/Settings'
-import Themes from './pages/Themes'
 import Users from './pages/Users'
 import Audit from './pages/Audit'
 import Account from './pages/Account'
@@ -44,7 +43,6 @@ export default function App() {
           <>
             <Route path="dominios" element={<Domains />} />
             <Route path="admin/configuracoes" element={<Settings />} />
-            <Route path="admin/temas" element={<Themes />} />
             <Route path="admin/usuarios" element={<Users me={user} />} />
             <Route path="admin/auditoria" element={<Audit />} />
           </>

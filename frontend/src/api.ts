@@ -34,22 +34,12 @@ export type User = {
   last_login: string | null
 }
 
-export type Theme = {
-  id: number
-  slug: string
-  name: string
-  builtin: boolean
-  tokens: Record<string, string>
-  logo: string
-}
-
 export type Branding = {
   version: string
   setup_required: boolean
   db_ready: boolean
   app_name: string
   timezone?: string
-  theme: Theme
 }
 
 export const fmtDate = (iso: string, tz?: string) =>
