@@ -66,6 +66,9 @@ h1 { font-size: 26px; } h2 { font-size: 19px; } h3 { font-size: 16px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
 .footer { padding: 14px 28px; text-align: center; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--border); position: relative; z-index: 1; }
 .footer b { color: var(--text); font-weight: 600; }
+.footer .by { display: block; margin-top: 4px; }
+.footer .by a { color: var(--primary); text-decoration: none; }
+.footer .by a:hover { text-decoration: underline; }
 .footer .ver { margin-left: 6px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--primary); color: var(--text); box-shadow: 0 0 10px var(--glow); }
 
 button, .btn {

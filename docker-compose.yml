@@ -1,16 +1,15 @@
 name: orbitarelay
 
-# Banco de dados (MySQL): ajuste os valores abaixo (ou defina as variáveis ORBITA_DB_* em um arquivo .env).
-# SSL: disable | preferred | required | skip-verify
-# Para usar um MySQL externo, aponte ORBITA_DB_HOST/PORT e remova o serviço "db" e o depends_on.
+# Banco de dados (MySQL). SSL: disable | preferred | required | skip-verify
+# Para usar um MySQL externo, altere ORBITA_DB_HOST/PORT e remova o serviço "db" e o depends_on.
 services:
   db:
     image: mysql:latest
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: ${ORBITA_DB_NAME:-orbita}
-      MYSQL_USER: ${ORBITA_DB_USER:-orbita}
-      MYSQL_PASSWORD: ${ORBITA_DB_PASSWORD:-orbita}
+      MYSQL_DATABASE: orbita
+      MYSQL_USER: orbita
+      MYSQL_PASSWORD: orbita
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
     volumes:
       - dbdata:/var/lib/mysql
@@ -23,24 +22,20 @@ services:
       start_period: 20s
 
   app:
-    build:
-      context: .
-      args:
-        VERSION: "0.1.0"
-    image: orbitarelay/app:0.1.0
+    image: ghcr.io/aprendendolinux/orbita-relay-app:1.0.0
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      ORBITA_DB_HOST: ${ORBITA_DB_HOST:-db}
-      ORBITA_DB_PORT: ${ORBITA_DB_PORT:-3306}
-      ORBITA_DB_NAME: ${ORBITA_DB_NAME:-orbita}
-      ORBITA_DB_USER: ${ORBITA_DB_USER:-orbita}
-      ORBITA_DB_PASSWORD: ${ORBITA_DB_PASSWORD:-orbita}
-      ORBITA_DB_SSL: ${ORBITA_DB_SSL:-preferred}
+      ORBITA_DB_HOST: db
+      ORBITA_DB_PORT: "3306"
+      ORBITA_DB_NAME: orbita
+      ORBITA_DB_USER: orbita
+      ORBITA_DB_PASSWORD: orbita
+      ORBITA_DB_SSL: preferred
     ports:
-      - "${ORBITA_HTTP_PORT:-8080}:8080"
+      - "8080:8080"
     volumes:
       - app-data:/data
       - mta-config:/config
@@ -48,12 +43,11 @@ services:
     networks: [orbita]
 
   mta:
-    build: ./mta
-    image: orbitarelay/mta:0.1.0
+    image: ghcr.io/aprendendolinux/orbita-relay-mta:1.0.0
     restart: unless-stopped
     network_mode: host
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: America/Sao_Paulo
     volumes:
       - mta-config:/config:ro
       - mta-logs:/var/log/exim

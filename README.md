@@ -10,11 +10,11 @@ Relay SMTP (Exim) + painel de relatórios, unificando `clubenaval/relatorios-smt
 ## Subir
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 docker compose logs app | grep TOKEN
 ```
 
-A conexão com o MySQL (host, porta, banco, usuário, senha, SSL) fica no `docker-compose.yml` (variáveis `ORBITA_DB_*`, com padrões que podem ser sobrescritos em `.env`). **Troque a senha padrão `orbita` antes de usar em produção.**
+A conexão com o MySQL (host, porta, banco, usuário, senha, SSL) fica no `docker-compose.yml` (variáveis `ORBITA_DB_*`). **Troque a senha padrão `orbita` antes de usar em produção.**
 Acesse `http://servidor:8080`, informe o token e crie o administrador; em seguida o assistente de configuração abre.
 
 No primeiro login um **assistente** guia a configuração (nome, fuso, modo Relay SMTP ou Smarthost, autenticação, logs); ele pode ser reaberto em Configurações.
