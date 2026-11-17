@@ -125,7 +125,7 @@ export default function Wizard({ first }: { first: boolean }) {
                 </div>
                 {auth === 'ldap' && (
                   <div className="form-grid">
-                    {['ldap_host', 'ldap_port', 'ldap_tls', 'ldap_skip_verify', 'ldap_domain', 'ldap_bind_dn', 'ldap_bind_pass', 'ldap_base_dn', 'ldap_user_filter', 'ldap_group_dn', 'ldap_admin_group_dn'].map(F)}
+                    {['ldap_host', 'ldap_port', 'ldap_tls', 'ldap_skip_verify', 'ldap_domain', 'ldap_base_dn', 'ldap_user_filter', 'ldap_group_dn', 'ldap_admin_group_dn'].map(F)}
                   </div>
                 )}
               </>

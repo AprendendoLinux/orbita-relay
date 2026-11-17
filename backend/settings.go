@@ -23,6 +23,7 @@ type Field struct {
 	Secret  bool     `json:"secret,omitempty"`
 	Options []string `json:"options,omitempty"`
 	Depends string   `json:"depends,omitempty"`
+	Example string   `json:"example,omitempty"`
 	Value   any      `json:"value"`
 	HasVal  bool     `json:"has_value,omitempty"`
 }
@@ -63,9 +64,7 @@ var settingFields = []Field{
 	{Key: "ldap_port", Group: "ldap", Label: "Porta", Type: "number", Default: 389, Depends: "auth_mode=ldap"},
 	{Key: "ldap_tls", Group: "ldap", Label: "Criptografia", Type: "select", Default: "none", Options: []string{"none", "starttls", "ldaps"}, Depends: "auth_mode=ldap"},
 	{Key: "ldap_skip_verify", Group: "ldap", Label: "Ignorar validação do certificado", Type: "bool", Default: false, Depends: "auth_mode=ldap"},
-	{Key: "ldap_domain", Group: "ldap", Label: "Domínio UPN (sufixo)", Type: "text", Default: "", Depends: "auth_mode=ldap", Help: "Ex.: @clubenaval.intra. Permite login sem conta de serviço (Bind DN)"},
-	{Key: "ldap_bind_dn", Group: "ldap", Label: "Bind DN (conta de serviço)", Type: "text", Default: "", Depends: "auth_mode=ldap"},
-	{Key: "ldap_bind_pass", Group: "ldap", Label: "Senha do bind", Type: "password", Default: "", Secret: true, Depends: "auth_mode=ldap"},
+	{Key: "ldap_domain", Group: "ldap", Label: "Domínio UPN (sufixo)", Type: "text", Default: "", Depends: "auth_mode=ldap", Help: "Obrigatório. O login é feito como usuario@dominio"},
 	{Key: "ldap_base_dn", Group: "ldap", Label: "Base DN", Type: "text", Default: "", Depends: "auth_mode=ldap"},
 	{Key: "ldap_user_filter", Group: "ldap", Label: "Filtro de usuário", Type: "text", Default: "(sAMAccountName=%s)", Help: "%s é substituído pelo login", Depends: "auth_mode=ldap"},
 	{Key: "ldap_group_dn", Group: "ldap", Label: "Grupo com acesso (DN)", Type: "text", Default: "", Help: "Vazio libera qualquer usuário do Base DN", Depends: "auth_mode=ldap"},
@@ -83,6 +82,23 @@ var (
 	reEmail  = regexp.MustCompile(`^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$`)
 	reNoCtrl = regexp.MustCompile(`^[^\x00-\x08\x0a-\x1f\x7f]*$`)
 )
+
+var fieldExamples = map[string]string{
+	"app_name": "Relay SMTP da Empresa", "timezone": "America/Sao_Paulo", "mta_hostname": "relay.dominio.local",
+	"relay_nets": "10.0.0.0/8, 192.168.1.0/24, 2001:db8::/32", "max_message_mb": "25", "dkim_selector": "orbita",
+	"public_ips": "203.0.113.10 e 2001:db8::10", "dmarc_policy": "none (monitorar) ou quarantine", "dmarc_rua": "dmarc@dominio.local",
+	"smarthost_host": "smtp.dominio.local", "smarthost_port": "587", "smarthost_user": "usuario@dominio.local", "smarthost_pass": "••••••••",
+	"ldap_host": "ad.dominio.local ou 192.168.0.10", "ldap_port": "389 (LDAP) ou 636 (LDAPS)", "ldap_domain": "@dominio.local",
+	"ldap_base_dn": "DC=dominio,DC=local", "ldap_user_filter": "(sAMAccountName=%s)",
+	"ldap_group_dn": "CN=GrupoAcesso,CN=Users,DC=dominio,DC=local", "ldap_admin_group_dn": "CN=Administradores,CN=Users,DC=dominio,DC=local",
+	"db_retention_days": "365", "log_rotate_mb": "50", "log_keep_files": "7",
+}
+
+func init() {
+	for i := range settingFields {
+		settingFields[i].Example = fieldExamples[settingFields[i].Key]
+	}
+}
 
 func fieldByKey(k string) *Field {
 	for i := range settingFields {

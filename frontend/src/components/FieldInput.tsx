@@ -1,6 +1,6 @@
 export type Field = {
   key: string; group: string; label: string; help?: string; type: string
-  options?: string[]; value: unknown; secret?: boolean; has_value?: boolean; depends?: string
+  options?: string[]; value: unknown; secret?: boolean; has_value?: boolean; depends?: string; example?: string
 }
 export type Vals = Record<string, unknown>
 
@@ -43,6 +43,7 @@ export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (
         />
       )}
       {f.help && <span className="help">{f.help}</span>}
+      {f.example && <span className="help">Ex.: <span className="mono">{f.example}</span></span>}
     </label>
   )
 }
