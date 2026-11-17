@@ -54,7 +54,6 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/admin/users/{id}", a.auth("admin", a.handleDeleteUser))
 	mux.HandleFunc("GET /api/admin/audit", a.auth("admin", a.handleAudit))
 
-
 	mux.HandleFunc("GET /api/admin/domains", a.auth("admin", a.handleListDomains))
 	mux.HandleFunc("POST /api/admin/domains", a.auth("admin", a.handleCreateDomain))
 	mux.HandleFunc("DELETE /api/admin/domains/{id}", a.auth("admin", a.handleDeleteDomain))
@@ -62,7 +61,9 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("PUT /api/admin/domains/{id}/dkim", a.auth("admin", a.handleToggleDKIM))
 	mux.HandleFunc("GET /api/admin/domains/{id}/check", a.auth("admin", a.handleCheckDomain))
 
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]any{"ok": true, "version": version}) })
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"ok": true, "version": version})
+	})
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { writeErr(w, 404, "não encontrado") })
 	mux.HandleFunc("GET /", a.serveSPA)
 	return securityHeaders(mux)
@@ -89,12 +90,12 @@ func (a *App) runMaintenance(ctx context.Context) {
 		if a.ready() {
 			days := a.sInt("db_retention_days")
 			if days > 0 {
-				if _, err := a.db.Exec(ctx, `DELETE FROM messages WHERE received_at < now() - make_interval(days => $1)`, days); err != nil {
+				if _, err := a.exec(ctx, `DELETE FROM messages WHERE received_at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`, days); err != nil {
 					log.Printf("retenção: %v", err)
 				}
 			}
-			_, _ = a.db.Exec(ctx, `DELETE FROM sessions WHERE expires_at < now()`)
-			_, _ = a.db.Exec(ctx, `DELETE FROM audit_log WHERE at < now() - interval '1 year'`)
+			_, _ = a.exec(ctx, `DELETE FROM sessions WHERE expires_at < UTC_TIMESTAMP(6)`)
+			_, _ = a.exec(ctx, `DELETE FROM audit_log WHERE at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 1 YEAR)`)
 		}
 		select {
 		case <-ctx.Done():

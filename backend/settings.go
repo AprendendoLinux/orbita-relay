@@ -22,6 +22,7 @@ type Field struct {
 	Default any      `json:"default"`
 	Secret  bool     `json:"secret,omitempty"`
 	Options []string `json:"options,omitempty"`
+	Depends string   `json:"depends,omitempty"`
 	Value   any      `json:"value"`
 	HasVal  bool     `json:"has_value,omitempty"`
 }
@@ -33,48 +34,53 @@ type Group struct {
 
 var settingGroups = []Group{
 	{"geral", "Geral"},
-	{"mta", "Relay SMTP"},
+	{"mta", "Servidor de e-mail"},
 	{"smarthost", "Smarthost"},
-	{"ldap", "LDAP / AD"},
+	{"ldap", "Autenticação"},
 	{"logs", "Logs e retenção"},
 }
 
 var settingFields = []Field{
 	{Key: "app_name", Group: "geral", Label: "Nome do sistema", Type: "text", Default: "OrbitaRelay"},
 	{Key: "timezone", Group: "geral", Label: "Fuso horário", Type: "text", Default: "America/Sao_Paulo", Help: "Nome IANA, ex.: America/Sao_Paulo"},
+	{Key: "relay_mode", Group: "mta", Label: "Modo de operação", Type: "select", Default: "relay", Options: []string{"relay", "smarthost"}, Help: "relay = entrega direta (domínios, DKIM, SPF, DMARC); smarthost = encaminha por outro servidor SMTP"},
 	{Key: "mta_hostname", Group: "mta", Label: "Hostname do relay (HELO)", Type: "text", Default: "", Help: "Vazio usa o hostname do container"},
 	{Key: "relay_nets", Group: "mta", Label: "Redes autorizadas a enviar", Type: "textarea", Default: "127.0.0.1\n::1\n10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\nfd00::/8", Help: "Um IP ou CIDR (IPv4/IPv6) por linha"},
-	{Key: "enforce_sender_domains", Group: "mta", Label: "Restringir remetentes aos domínios cadastrados", Type: "bool", Default: true},
+	{Key: "enforce_sender_domains", Group: "mta", Label: "Restringir remetentes aos domínios cadastrados", Type: "bool", Default: true, Depends: "relay_mode=relay"},
 	{Key: "ip_mode", Group: "mta", Label: "Modo IP", Type: "select", Default: "dual", Options: []string{"dual", "ipv4"}, Help: "dual = IPv4 + IPv6"},
 	{Key: "max_message_mb", Group: "mta", Label: "Tamanho máximo da mensagem (MB)", Type: "number", Default: 25},
-	{Key: "dkim_selector", Group: "mta", Label: "Seletor DKIM", Type: "text", Default: "orbita"},
-	{Key: "smarthost_enabled", Group: "smarthost", Label: "Usar smarthost", Type: "bool", Default: false},
-	{Key: "smarthost_host", Group: "smarthost", Label: "Servidor", Type: "text", Default: ""},
-	{Key: "smarthost_port", Group: "smarthost", Label: "Porta", Type: "number", Default: 587},
-	{Key: "smarthost_tls", Group: "smarthost", Label: "Criptografia", Type: "select", Default: "starttls", Options: []string{"none", "starttls", "tls"}, Help: "tls = SMTPS implícito (porta 465)"},
-	{Key: "smarthost_user", Group: "smarthost", Label: "Usuário", Type: "text", Default: ""},
-	{Key: "smarthost_pass", Group: "smarthost", Label: "Senha", Type: "password", Default: "", Secret: true},
-	{Key: "ldap_enabled", Group: "ldap", Label: "Habilitar login LDAP/AD", Type: "bool", Default: false},
-	{Key: "ldap_host", Group: "ldap", Label: "Servidor", Type: "text", Default: ""},
-	{Key: "ldap_port", Group: "ldap", Label: "Porta", Type: "number", Default: 389},
-	{Key: "ldap_tls", Group: "ldap", Label: "Criptografia", Type: "select", Default: "none", Options: []string{"none", "starttls", "ldaps"}},
-	{Key: "ldap_skip_verify", Group: "ldap", Label: "Ignorar validação do certificado", Type: "bool", Default: false},
-	{Key: "ldap_bind_dn", Group: "ldap", Label: "Bind DN (conta de serviço)", Type: "text", Default: ""},
-	{Key: "ldap_bind_pass", Group: "ldap", Label: "Senha do bind", Type: "password", Default: "", Secret: true},
-	{Key: "ldap_base_dn", Group: "ldap", Label: "Base DN", Type: "text", Default: ""},
-	{Key: "ldap_user_filter", Group: "ldap", Label: "Filtro de usuário", Type: "text", Default: "(sAMAccountName=%s)", Help: "%s é substituído pelo login"},
-	{Key: "ldap_group_dn", Group: "ldap", Label: "Grupo com acesso (DN)", Type: "text", Default: "", Help: "Vazio libera qualquer usuário do Base DN"},
-	{Key: "ldap_admin_group_dn", Group: "ldap", Label: "Grupo administrador (DN)", Type: "text", Default: ""},
+	{Key: "dkim_selector", Group: "mta", Label: "Seletor DKIM", Type: "text", Default: "orbita", Depends: "relay_mode=relay"},
+	{Key: "public_ips", Group: "mta", Label: "IPs públicos de saída (IPv4/IPv6)", Type: "textarea", Default: "", Depends: "relay_mode=relay", Help: "Um por linha. Usados para montar o registro SPF"},
+	{Key: "dmarc_policy", Group: "mta", Label: "Política DMARC", Type: "select", Default: "none", Options: []string{"none", "quarantine", "reject"}, Depends: "relay_mode=relay"},
+	{Key: "dmarc_rua", Group: "mta", Label: "E-mail para relatórios DMARC (rua)", Type: "text", Default: "", Depends: "relay_mode=relay"},
+	{Key: "smarthost_host", Group: "smarthost", Label: "Servidor", Type: "text", Default: "", Depends: "relay_mode=smarthost"},
+	{Key: "smarthost_port", Group: "smarthost", Label: "Porta", Type: "number", Default: 587, Depends: "relay_mode=smarthost"},
+	{Key: "smarthost_tls", Group: "smarthost", Label: "Criptografia", Type: "select", Default: "starttls", Options: []string{"none", "starttls", "tls"}, Help: "tls = SMTPS implícito (porta 465)", Depends: "relay_mode=smarthost"},
+	{Key: "smarthost_user", Group: "smarthost", Label: "Usuário", Type: "text", Default: "", Depends: "relay_mode=smarthost"},
+	{Key: "smarthost_pass", Group: "smarthost", Label: "Senha", Type: "password", Default: "", Secret: true, Depends: "relay_mode=smarthost"},
+	{Key: "auth_mode", Group: "ldap", Label: "Tipo de autenticação do painel", Type: "select", Default: "local", Options: []string{"local", "ldap"}, Help: "local = só usuários locais; ldap = LDAP/AD além dos usuários locais"},
+	{Key: "ldap_host", Group: "ldap", Label: "Servidor", Type: "text", Default: "", Depends: "auth_mode=ldap"},
+	{Key: "ldap_port", Group: "ldap", Label: "Porta", Type: "number", Default: 389, Depends: "auth_mode=ldap"},
+	{Key: "ldap_tls", Group: "ldap", Label: "Criptografia", Type: "select", Default: "none", Options: []string{"none", "starttls", "ldaps"}, Depends: "auth_mode=ldap"},
+	{Key: "ldap_skip_verify", Group: "ldap", Label: "Ignorar validação do certificado", Type: "bool", Default: false, Depends: "auth_mode=ldap"},
+	{Key: "ldap_bind_dn", Group: "ldap", Label: "Bind DN (conta de serviço)", Type: "text", Default: "", Depends: "auth_mode=ldap"},
+	{Key: "ldap_bind_pass", Group: "ldap", Label: "Senha do bind", Type: "password", Default: "", Secret: true, Depends: "auth_mode=ldap"},
+	{Key: "ldap_base_dn", Group: "ldap", Label: "Base DN", Type: "text", Default: "", Depends: "auth_mode=ldap"},
+	{Key: "ldap_user_filter", Group: "ldap", Label: "Filtro de usuário", Type: "text", Default: "(sAMAccountName=%s)", Help: "%s é substituído pelo login", Depends: "auth_mode=ldap"},
+	{Key: "ldap_group_dn", Group: "ldap", Label: "Grupo com acesso (DN)", Type: "text", Default: "", Help: "Vazio libera qualquer usuário do Base DN", Depends: "auth_mode=ldap"},
+	{Key: "ldap_admin_group_dn", Group: "ldap", Label: "Grupo administrador (DN)", Type: "text", Default: "", Depends: "auth_mode=ldap"},
 	{Key: "db_retention_days", Group: "logs", Label: "Retenção no banco (dias)", Type: "number", Default: 365, Help: "Registros mais antigos são apagados automaticamente"},
 	{Key: "log_rotate_mb", Group: "logs", Label: "Rotacionar log do Exim ao atingir (MB)", Type: "number", Default: 50},
+	{Key: "wizard_done", Group: "_sistema", Label: "Assistente concluído", Type: "bool", Default: false},
 	{Key: "log_keep_files", Group: "logs", Label: "Arquivos de log mantidos em disco", Type: "number", Default: 7, Help: "Rotação diária; arquivos antigos são compactados"},
 }
 
 var (
-	reHost    = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
-	reDomain  = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
-	reSel     = regexp.MustCompile(`^[A-Za-z0-9-]{1,32}$`)
-	reNoCtrl  = regexp.MustCompile(`^[^\x00-\x08\x0a-\x1f\x7f]*$`)
+	reHost   = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
+	reDomain = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
+	reSel    = regexp.MustCompile(`^[A-Za-z0-9-]{1,32}$`)
+	reEmail  = regexp.MustCompile(`^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$`)
+	reNoCtrl = regexp.MustCompile(`^[^\x00-\x08\x0a-\x1f\x7f]*$`)
 )
 
 func fieldByKey(k string) *Field {
@@ -150,6 +156,19 @@ func validateSetting(f *Field, v any) (any, error) {
 		if !reSel.MatchString(s) {
 			return nil, errors.New("seletor inválido")
 		}
+	case "dmarc_rua":
+		if s != "" && !reEmail.MatchString(s) {
+			return nil, errors.New("e-mail inválido")
+		}
+	case "public_ips":
+		for _, l := range strings.Split(s, "\n") {
+			if l = strings.TrimSpace(l); l == "" {
+				continue
+			}
+			if _, err := netip.ParseAddr(l); err != nil {
+				return nil, fmt.Errorf("IP inválido: %s", l)
+			}
+		}
 	case "timezone":
 		if _, err := time.LoadLocation(s); err != nil {
 			return nil, errors.New("fuso horário inválido")
@@ -179,7 +198,7 @@ func validateSetting(f *Field, v any) (any, error) {
 }
 
 func (a *App) loadSettings(ctx context.Context) error {
-	rows, err := a.db.Query(ctx, `SELECT key, value FROM settings`)
+	rows, err := a.query(ctx, `SELECT k, v FROM settings`)
 	if err != nil {
 		return err
 	}
@@ -247,8 +266,7 @@ func (a *App) sBool(key string) bool {
 
 func (a *App) setRaw(ctx context.Context, key string, v any) error {
 	b, _ := json.Marshal(v)
-	_, err := a.db.Exec(ctx, `INSERT INTO settings(key,value) VALUES($1,$2)
-		ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, key, b)
+	_, err := a.exec(ctx, `INSERT INTO settings(k,v) VALUES(?,?) ON DUPLICATE KEY UPDATE v=VALUES(v)`, key, string(b))
 	if err != nil {
 		return err
 	}

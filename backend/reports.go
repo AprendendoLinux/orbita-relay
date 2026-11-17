@@ -36,39 +36,34 @@ func (a *App) buildFilter(r *http.Request) (string, []any) {
 	q := r.URL.Query()
 	var conds []string
 	var args []any
-	add := func(cond string, v any) {
-		args = append(args, v)
-		conds = append(conds, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args))))
-	}
 	loc := a.location()
 	if s := q.Get("from"); s != "" {
 		if t, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
-			add("m.received_at >= ?", t)
+			conds, args = append(conds, "m.received_at >= ?"), append(args, t)
 		}
 	}
 	if s := q.Get("to"); s != "" {
 		if t, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
-			add("m.received_at < ?", t.AddDate(0, 0, 1))
+			conds, args = append(conds, "m.received_at < ?"), append(args, t.AddDate(0, 0, 1))
 		}
 	}
 	if s := q.Get("status"); s == "queued" || s == "delivered" || s == "failed" || s == "deferred" {
-		add("m.status = ?", s)
+		conds, args = append(conds, "m.status = ?"), append(args, s)
 	}
 	if s := strings.TrimSpace(q.Get("sender")); s != "" {
-		add(`m.sender ILIKE ? ESCAPE '\'`, "%"+likeEsc.Replace(s)+"%")
+		conds, args = append(conds, `m.sender LIKE ? ESCAPE '\\'`), append(args, "%"+likeEsc.Replace(s)+"%")
 	}
 	if s := strings.TrimSpace(q.Get("host")); s != "" {
-		add(`(m.origin_host ILIKE ? ESCAPE '\' OR m.origin_ip ILIKE ? ESCAPE '\')`, "%"+likeEsc.Replace(s)+"%")
+		p := "%" + likeEsc.Replace(s) + "%"
+		conds, args = append(conds, `(m.origin_host LIKE ? ESCAPE '\\' OR m.origin_ip LIKE ? ESCAPE '\\')`), append(args, p, p)
 	}
 	if s := strings.TrimSpace(q.Get("recipient")); s != "" {
-		add(`EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=m.id AND d.recipient ILIKE ? ESCAPE '\')`, "%"+likeEsc.Replace(s)+"%")
+		conds, args = append(conds, `EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=m.id AND d.recipient LIKE ? ESCAPE '\\')`), append(args, "%"+likeEsc.Replace(s)+"%")
 	}
 	if s := strings.TrimSpace(q.Get("q")); s != "" {
 		p := "%" + likeEsc.Replace(s) + "%"
-		args = append(args, p)
-		n := strconv.Itoa(len(args))
-		conds = append(conds, `(m.subject ILIKE $`+n+` ESCAPE '\' OR m.sender ILIKE $`+n+` ESCAPE '\' OR m.exim_id ILIKE $`+n+
-			` ESCAPE '\' OR EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=m.id AND d.recipient ILIKE $`+n+` ESCAPE '\'))`)
+		conds = append(conds, `(m.subject LIKE ? ESCAPE '\\' OR m.sender LIKE ? ESCAPE '\\' OR m.exim_id LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=m.id AND d.recipient LIKE ? ESCAPE '\\'))`)
+		args = append(args, p, p, p, p)
 	}
 	if len(conds) == 0 {
 		return "", args
@@ -77,7 +72,18 @@ func (a *App) buildFilter(r *http.Request) (string, []any) {
 }
 
 const msgSelect = `SELECT m.id,m.exim_id,m.received_at,m.sender,m.origin_host,m.origin_ip,m.subject,m.size,m.status,
-	COALESCE((SELECT array_agg(DISTINCT d.recipient) FROM deliveries d WHERE d.message_id=m.id),'{}') FROM messages m`
+	COALESCE((SELECT GROUP_CONCAT(DISTINCT d.recipient ORDER BY d.recipient SEPARATOR '\n') FROM deliveries d WHERE d.message_id=m.id),'') FROM messages m`
+
+func scanMsg(sc interface{ Scan(...any) error }) (msgRow, error) {
+	var m msgRow
+	var rc string
+	err := sc.Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &rc)
+	m.Recipients = []string{}
+	if rc != "" {
+		m.Recipients = strings.Split(rc, "\n")
+	}
+	return m, err
+}
 
 func (a *App) handleMessages(w http.ResponseWriter, r *http.Request) {
 	where, args := a.buildFilter(r)
@@ -90,12 +96,11 @@ func (a *App) handleMessages(w http.ResponseWriter, r *http.Request) {
 		size = 50
 	}
 	var total int
-	if err := a.db.QueryRow(r.Context(), `SELECT count(*) FROM messages m`+where, args...).Scan(&total); err != nil {
+	if err := a.row(r.Context(), `SELECT count(*) FROM messages m`+where, args...).Scan(&total); err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
 	}
-	n := len(args)
-	rows, err := a.db.Query(r.Context(), msgSelect+where+fmt.Sprintf(` ORDER BY m.received_at DESC LIMIT $%d OFFSET $%d`, n+1, n+2),
+	rows, err := a.query(r.Context(), msgSelect+where+` ORDER BY m.received_at DESC LIMIT ? OFFSET ?`,
 		append(args, size, (page-1)*size)...)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
@@ -104,8 +109,7 @@ func (a *App) handleMessages(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	out := []msgRow{}
 	for rows.Next() {
-		var m msgRow
-		if rows.Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &m.Recipients) == nil {
+		if m, err := scanMsg(rows); err == nil {
 			out = append(out, m)
 		}
 	}
@@ -113,14 +117,12 @@ func (a *App) handleMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleMessageDetail(w http.ResponseWriter, r *http.Request) {
-	var m msgRow
-	err := a.db.QueryRow(r.Context(), msgSelect+` WHERE m.id=$1`, r.PathValue("id")).
-		Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &m.Recipients)
+	m, err := scanMsg(a.row(r.Context(), msgSelect+` WHERE m.id=?`, r.PathValue("id")))
 	if err != nil {
 		writeErr(w, 404, "mensagem não encontrada")
 		return
 	}
-	rows, err := a.db.Query(r.Context(), `SELECT at,recipient,status,remote_host,remote_ip,detail FROM deliveries WHERE message_id=$1 ORDER BY at,id`, m.ID)
+	rows, err := a.query(r.Context(), `SELECT at,recipient,status,remote_host,remote_ip,detail FROM deliveries WHERE message_id=? ORDER BY at,id`, m.ID)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -153,7 +155,7 @@ func csvSafe(s string) string {
 
 func (a *App) handleExport(w http.ResponseWriter, r *http.Request) {
 	where, args := a.buildFilter(r)
-	rows, err := a.db.Query(r.Context(), msgSelect+where+` ORDER BY m.received_at DESC LIMIT 200000`, args...)
+	rows, err := a.query(r.Context(), msgSelect+where+` ORDER BY m.received_at DESC LIMIT 200000`, args...)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -166,8 +168,8 @@ func (a *App) handleExport(w http.ResponseWriter, r *http.Request) {
 	_ = cw.Write([]string{"Data/Hora", "ID", "Remetente", "Destinatarios", "Assunto", "Status", "Host de origem", "IP de origem", "Tamanho"})
 	loc := a.location()
 	for rows.Next() {
-		var m msgRow
-		if rows.Scan(&m.ID, &m.EximID, &m.ReceivedAt, &m.Sender, &m.OriginHost, &m.OriginIP, &m.Subject, &m.Size, &m.Status, &m.Recipients) != nil {
+		m, err := scanMsg(rows)
+		if err != nil {
 			continue
 		}
 		_ = cw.Write([]string{m.ReceivedAt.In(loc).Format("2006-01-02 15:04:05"), m.EximID, csvSafe(m.Sender),
@@ -183,7 +185,7 @@ type kv struct {
 
 func (a *App) topList(ctx context.Context, q string, days int) []kv {
 	out := []kv{}
-	rows, err := a.db.Query(ctx, q, days)
+	rows, err := a.query(ctx, q, days)
 	if err != nil {
 		return out
 	}
@@ -203,7 +205,12 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 		days = 7
 	}
 	ctx := r.Context()
-	tz := a.sStr("timezone")
+	_, offSec := time.Now().In(a.location()).Zone()
+	sign := "+"
+	if offSec < 0 {
+		sign, offSec = "-", -offSec
+	}
+	tz := fmt.Sprintf("%s%02d:%02d", sign, offSec/3600, (offSec%3600)/60)
 	totals := map[string]int{"queued": 0, "delivered": 0, "failed": 0, "deferred": 0}
 	type pt struct {
 		Day    string `json:"day"`
@@ -211,8 +218,8 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 		Count  int    `json:"count"`
 	}
 	series := []pt{}
-	rows, err := a.db.Query(ctx, `SELECT to_char((received_at AT TIME ZONE $2)::date,'YYYY-MM-DD'), status, count(*)
-		FROM messages WHERE received_at >= now() - make_interval(days => $1) GROUP BY 1,2 ORDER BY 1`, days, tz)
+	rows, err := a.query(ctx, `SELECT DATE_FORMAT(CONVERT_TZ(received_at,'+00:00',?),'%Y-%m-%d') AS d, status, count(*)
+		FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) GROUP BY d, status ORDER BY d`, tz, days)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -227,8 +234,8 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 	rows.Close()
 	writeJSON(w, 200, map[string]any{
 		"days": days, "totals": totals, "series": series,
-		"top_senders": a.topList(ctx, `SELECT sender_domain, count(*) c FROM messages WHERE received_at >= now() - make_interval(days => $1) AND sender_domain<>'' GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
-		"top_hosts": a.topList(ctx, `SELECT CASE WHEN origin_host<>'' THEN origin_host ELSE origin_ip END, count(*) c FROM messages WHERE received_at >= now() - make_interval(days => $1) GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
-		"top_recipient_domains": a.topList(ctx, `SELECT split_part(d.recipient,'@',2), count(*) c FROM deliveries d WHERE d.at >= now() - make_interval(days => $1) GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
+		"top_senders":           a.topList(ctx, `SELECT sender_domain, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) AND sender_domain<>'' GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
+		"top_hosts":             a.topList(ctx, `SELECT CASE WHEN origin_host<>'' THEN origin_host ELSE origin_ip END, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
+		"top_recipient_domains": a.topList(ctx, `SELECT SUBSTRING_INDEX(d.recipient,'@',-1), count(*) c FROM deliveries d WHERE d.at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) GROUP BY 1 ORDER BY c DESC LIMIT 8`, days),
 	})
 }

@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -19,11 +20,14 @@ type Domain struct {
 	DKIMEnabled bool      `json:"dkim_enabled"`
 	DKIMRecord  string    `json:"dkim_record,omitempty"`
 	DKIMHost    string    `json:"dkim_host,omitempty"`
+	SPFRecord   string    `json:"spf_record"`
+	DMARCHost   string    `json:"dmarc_host"`
+	DMARCRecord string    `json:"dmarc_record"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (a *App) handleListDomains(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(r.Context(), `SELECT id,domain,dkim_enabled,dkim_public,created_at FROM domains ORDER BY domain`)
+	rows, err := a.query(r.Context(), `SELECT id,domain,dkim_enabled,dkim_public,created_at FROM domains ORDER BY domain`)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -41,6 +45,9 @@ func (a *App) handleListDomains(w http.ResponseWriter, r *http.Request) {
 			d.DKIMHost = sel + "._domainkey." + d.Domain
 			d.DKIMRecord = "v=DKIM1; k=rsa; p=" + pub
 		}
+		d.DMARCHost = "_dmarc." + d.Domain
+		d.SPFRecord = a.spfRecord()
+		d.DMARCRecord = a.dmarcRecord()
 		out = append(out, d)
 	}
 	writeJSON(w, 200, out)
@@ -58,7 +65,7 @@ func (a *App) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "domínio inválido")
 		return
 	}
-	if _, err := a.db.Exec(r.Context(), `INSERT INTO domains(domain) VALUES($1)`, d); err != nil {
+	if _, err := a.exec(r.Context(), `INSERT INTO domains(domain) VALUES(?)`, d); err != nil {
 		writeErr(w, 409, "domínio já cadastrado")
 		return
 	}
@@ -69,10 +76,11 @@ func (a *App) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 	var d string
-	if err := a.db.QueryRow(r.Context(), `DELETE FROM domains WHERE id=$1 RETURNING domain`, r.PathValue("id")).Scan(&d); err != nil {
+	if err := a.row(r.Context(), `SELECT domain FROM domains WHERE id=?`, r.PathValue("id")).Scan(&d); err != nil {
 		writeErr(w, 404, "domínio não encontrado")
 		return
 	}
+	_, _ = a.exec(r.Context(), `DELETE FROM domains WHERE id=?`, r.PathValue("id"))
 	a.audit(r.Context(), userFrom(r).Username, "domain.delete", d)
 	_ = a.renderMTA(r.Context())
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -92,9 +100,10 @@ func (a *App) handleGenerateDKIM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var d string
-	err = a.db.QueryRow(r.Context(), `UPDATE domains SET dkim_private=$2, dkim_public=$3, dkim_enabled=true WHERE id=$1 RETURNING domain`,
-		r.PathValue("id"), enc, base64.StdEncoding.EncodeToString(pubDER)).Scan(&d)
-	if err != nil {
+	id := r.PathValue("id")
+	_, _ = a.exec(r.Context(), `UPDATE domains SET dkim_private=?, dkim_public=?, dkim_enabled=1 WHERE id=?`,
+		enc, base64.StdEncoding.EncodeToString(pubDER), id)
+	if err = a.row(r.Context(), `SELECT domain FROM domains WHERE id=?`, id).Scan(&d); err != nil {
 		writeErr(w, 404, "domínio não encontrado")
 		return
 	}
@@ -110,9 +119,8 @@ func (a *App) handleToggleDKIM(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	var d string
-	err := a.db.QueryRow(r.Context(), `UPDATE domains SET dkim_enabled=$2 WHERE id=$1 AND dkim_private<>'' RETURNING domain`, r.PathValue("id"), in.Enabled).Scan(&d)
-	if err != nil {
+	res, err := a.exec(r.Context(), `UPDATE domains SET dkim_enabled=? WHERE id=? AND dkim_private<>''`, in.Enabled, r.PathValue("id"))
+	if n, _ := res.RowsAffected(); err != nil || n == 0 {
 		writeErr(w, 400, "gere a chave DKIM primeiro")
 		return
 	}
@@ -133,7 +141,7 @@ func lookupTXT(ctx context.Context, name string) []string {
 
 func (a *App) handleCheckDomain(w http.ResponseWriter, r *http.Request) {
 	var d, pub string
-	if err := a.db.QueryRow(r.Context(), `SELECT domain,dkim_public FROM domains WHERE id=$1`, r.PathValue("id")).Scan(&d, &pub); err != nil {
+	if err := a.row(r.Context(), `SELECT domain,dkim_public FROM domains WHERE id=?`, r.PathValue("id")).Scan(&d, &pub); err != nil {
 		writeErr(w, 404, "domínio não encontrado")
 		return
 	}
@@ -175,4 +183,34 @@ func (a *App) handleCheckDomain(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, 200, map[string]any{"spf": spf, "dmarc": dmarc, "dkim": dkim})
+}
+
+func (a *App) spfRecord() string {
+	var parts []string
+	for _, l := range strings.Split(a.sStr("public_ips"), "\n") {
+		l = strings.TrimSpace(l)
+		if ip, err := netip.ParseAddr(l); err == nil {
+			if ip.Is4() {
+				parts = append(parts, "ip4:"+l)
+			} else {
+				parts = append(parts, "ip6:"+l)
+			}
+		}
+	}
+	if len(parts) == 0 {
+		if h := a.sStr("mta_hostname"); h != "" {
+			parts = append(parts, "a:"+h)
+		} else {
+			parts = append(parts, "ip4:IP_DO_SERVIDOR")
+		}
+	}
+	return "v=spf1 " + strings.Join(parts, " ") + " ~all"
+}
+
+func (a *App) dmarcRecord() string {
+	rec := "v=DMARC1; p=" + a.sStr("dmarc_policy")
+	if rua := a.sStr("dmarc_rua"); rua != "" {
+		rec += "; rua=mailto:" + rua
+	}
+	return rec + "; adkim=r; aspf=r; pct=100"
 }

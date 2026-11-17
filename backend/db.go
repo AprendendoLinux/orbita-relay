@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
-	"fmt"
-	"net/url"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/go-sql-driver/mysql"
 )
 
 type dbConfig struct {
@@ -22,14 +23,27 @@ type dbConfig struct {
 }
 
 func (c dbConfig) dsn() string {
-	u := url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(c.User, c.Password),
-		Host:     fmt.Sprintf("%s:%d", c.Host, c.Port),
-		Path:     "/" + c.Name,
-		RawQuery: "sslmode=" + url.QueryEscape(c.SSLMode),
+	cfg := mysql.NewConfig()
+	cfg.User = c.User
+	cfg.Passwd = c.Password
+	cfg.Net = "tcp"
+	cfg.Addr = net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
+	cfg.DBName = c.Name
+	cfg.ParseTime = true
+	cfg.Loc = time.UTC
+	cfg.Collation = "utf8mb4_0900_ai_ci"
+	switch c.SSLMode {
+	case "required":
+		cfg.TLSConfig = "true"
+	case "skip-verify":
+		cfg.TLSConfig = "skip-verify"
+	case "disable":
+		cfg.TLSConfig = "false"
+	default:
+		cfg.TLSConfig = "preferred"
 	}
-	return u.String()
+	cfg.Params = map[string]string{"group_concat_max_len": "1048576", "time_zone": "'+00:00'", "sql_mode": "'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'"}
+	return cfg.FormatDSN()
 }
 
 func (a *App) bootstrapPath() string { return filepath.Join(a.dataDir, "bootstrap.json") }
@@ -61,116 +75,131 @@ func (a *App) saveBootstrap(c dbConfig) error {
 	return os.WriteFile(a.bootstrapPath(), b, 0o600)
 }
 
-func connectDB(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+func connectDB(ctx context.Context, dsn string) (*sql.DB, error) {
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(12)
+	db.SetMaxIdleConns(4)
+	db.SetConnMaxLifetime(30 * time.Minute)
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
 		return nil, err
 	}
-	cfg.MaxConns = 10
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	return pool, nil
+	return db, nil
 }
 
-const schema = `
-CREATE TABLE IF NOT EXISTS settings (
-  key text PRIMARY KEY,
-  value jsonb NOT NULL,
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS users (
-  id bigserial PRIMARY KEY,
-  username text NOT NULL UNIQUE,
-  display_name text NOT NULL DEFAULT '',
-  email text NOT NULL DEFAULT '',
-  password_hash text,
-  role text NOT NULL DEFAULT 'viewer',
-  source text NOT NULL DEFAULT 'local',
-  disabled boolean NOT NULL DEFAULT false,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  last_login timestamptz
-);
-CREATE TABLE IF NOT EXISTS sessions (
-  token_hash text PRIMARY KEY,
-  user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  expires_at timestamptz NOT NULL,
-  ip text NOT NULL DEFAULT ''
-);
-DROP TABLE IF EXISTS themes;
-CREATE TABLE IF NOT EXISTS domains (
-  id bigserial PRIMARY KEY,
-  domain text NOT NULL UNIQUE,
-  dkim_enabled boolean NOT NULL DEFAULT false,
-  dkim_private text NOT NULL DEFAULT '',
-  dkim_public text NOT NULL DEFAULT '',
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS messages (
-  id bigserial PRIMARY KEY,
-  exim_id text NOT NULL UNIQUE,
-  received_at timestamptz NOT NULL,
-  sender text NOT NULL DEFAULT '',
-  sender_domain text NOT NULL DEFAULT '',
-  origin_host text NOT NULL DEFAULT '',
-  origin_ip text NOT NULL DEFAULT '',
-  subject text NOT NULL DEFAULT '',
-  size integer NOT NULL DEFAULT 0,
-  status text NOT NULL DEFAULT 'queued',
-  completed_at timestamptz
-);
-CREATE INDEX IF NOT EXISTS messages_received_idx ON messages (received_at DESC);
-CREATE INDEX IF NOT EXISTS messages_status_idx ON messages (status, received_at DESC);
-CREATE INDEX IF NOT EXISTS messages_sender_idx ON messages (sender_domain, received_at DESC);
-CREATE TABLE IF NOT EXISTS deliveries (
-  id bigserial PRIMARY KEY,
-  message_id bigint NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-  at timestamptz NOT NULL,
-  recipient text NOT NULL,
-  status text NOT NULL,
-  remote_host text NOT NULL DEFAULT '',
-  remote_ip text NOT NULL DEFAULT '',
-  detail text NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS deliveries_message_idx ON deliveries (message_id);
-CREATE INDEX IF NOT EXISTS deliveries_recipient_idx ON deliveries (recipient);
-CREATE TABLE IF NOT EXISTS ingest_state (
-  file text PRIMARY KEY,
-  inode bigint NOT NULL DEFAULT 0,
-  off bigint NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS audit_log (
-  id bigserial PRIMARY KEY,
-  at timestamptz NOT NULL DEFAULT now(),
-  username text NOT NULL,
-  action text NOT NULL,
-  detail text NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS audit_at_idx ON audit_log (at DESC);
-`
+func (a *App) exec(ctx context.Context, q string, args ...any) (sql.Result, error) {
+	return a.db.ExecContext(ctx, q, args...)
+}
+func (a *App) row(ctx context.Context, q string, args ...any) *sql.Row {
+	return a.db.QueryRowContext(ctx, q, args...)
+}
+func (a *App) query(ctx context.Context, q string, args ...any) (*sql.Rows, error) {
+	return a.db.QueryContext(ctx, q, args...)
+}
+
+var schema = []string{
+	`CREATE TABLE IF NOT EXISTS settings (
+	  k VARCHAR(64) PRIMARY KEY,
+	  v JSON NOT NULL,
+	  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS users (
+	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	  username VARCHAR(128) NOT NULL UNIQUE,
+	  display_name VARCHAR(255) NOT NULL DEFAULT '',
+	  email VARCHAR(255) NOT NULL DEFAULT '',
+	  password_hash VARCHAR(255) NULL,
+	  role VARCHAR(16) NOT NULL DEFAULT 'viewer',
+	  source VARCHAR(16) NOT NULL DEFAULT 'local',
+	  disabled TINYINT(1) NOT NULL DEFAULT 0,
+	  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	  last_login DATETIME(6) NULL
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS sessions (
+	  token_hash CHAR(64) PRIMARY KEY,
+	  user_id BIGINT NOT NULL,
+	  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	  expires_at DATETIME(6) NOT NULL,
+	  ip VARCHAR(64) NOT NULL DEFAULT '',
+	  CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS domains (
+	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	  domain VARCHAR(255) NOT NULL UNIQUE,
+	  dkim_enabled TINYINT(1) NOT NULL DEFAULT 0,
+	  dkim_private TEXT NOT NULL DEFAULT (''),
+	  dkim_public TEXT NOT NULL DEFAULT (''),
+	  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS messages (
+	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	  exim_id VARCHAR(40) NOT NULL UNIQUE,
+	  received_at DATETIME(6) NOT NULL,
+	  sender VARCHAR(320) NOT NULL DEFAULT '',
+	  sender_domain VARCHAR(255) NOT NULL DEFAULT '',
+	  origin_host VARCHAR(255) NOT NULL DEFAULT '',
+	  origin_ip VARCHAR(64) NOT NULL DEFAULT '',
+	  subject VARCHAR(1000) NOT NULL DEFAULT '',
+	  size INT NOT NULL DEFAULT 0,
+	  status VARCHAR(16) NOT NULL DEFAULT 'queued',
+	  completed_at DATETIME(6) NULL,
+	  INDEX messages_received_idx (received_at),
+	  INDEX messages_status_idx (status, received_at),
+	  INDEX messages_sender_idx (sender_domain, received_at)
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS deliveries (
+	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	  message_id BIGINT NOT NULL,
+	  at DATETIME(6) NOT NULL,
+	  recipient VARCHAR(320) NOT NULL,
+	  status VARCHAR(16) NOT NULL,
+	  remote_host VARCHAR(255) NOT NULL DEFAULT '',
+	  remote_ip VARCHAR(64) NOT NULL DEFAULT '',
+	  detail TEXT NOT NULL DEFAULT (''),
+	  INDEX deliveries_message_idx (message_id),
+	  INDEX deliveries_recipient_idx (recipient),
+	  CONSTRAINT fk_deliveries_message FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS ingest_state (
+	  file VARCHAR(32) PRIMARY KEY,
+	  inode BIGINT NOT NULL DEFAULT 0,
+	  pos BIGINT NOT NULL DEFAULT 0
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS audit_log (
+	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	  at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	  username VARCHAR(128) NOT NULL,
+	  action VARCHAR(64) NOT NULL,
+	  detail TEXT NOT NULL DEFAULT (''),
+	  INDEX audit_at_idx (at)
+	) DEFAULT CHARSET=utf8mb4`,
+}
 
 func (a *App) migrate(ctx context.Context) error {
-	if _, err := a.db.Exec(ctx, schema); err != nil {
-		return err
+	for _, s := range schema {
+		if _, err := a.exec(ctx, s); err != nil {
+			return err
+		}
 	}
-	_, _ = a.db.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS pg_trgm`)
-	_, _ = a.db.Exec(ctx, `CREATE INDEX IF NOT EXISTS messages_subject_trgm ON messages USING gin (subject gin_trgm_ops)`)
-	_, _ = a.db.Exec(ctx, `CREATE INDEX IF NOT EXISTS messages_sender_trgm ON messages USING gin (sender gin_trgm_ops)`)
-	_, _ = a.db.Exec(ctx, `CREATE INDEX IF NOT EXISTS deliveries_recipient_trgm ON deliveries USING gin (recipient gin_trgm_ops)`)
 	return nil
 }
 
 func (a *App) audit(ctx context.Context, user, action, detail string) {
-	if a.db == nil {
+	if !a.ready() {
 		return
 	}
-	_, _ = a.db.Exec(ctx, `INSERT INTO audit_log(username, action, detail) VALUES ($1,$2,$3)`, user, action, detail)
+	_, _ = a.exec(ctx, `INSERT INTO audit_log(username, action, detail) VALUES (?,?,?)`, user, action, detail)
+}
+
+func trunc(s string, n int) string {
+	r := []rune(s)
+	if len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }

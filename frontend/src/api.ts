@@ -40,6 +40,9 @@ export type Branding = {
   db_ready: boolean
   app_name: string
   timezone?: string
+  relay_mode?: string
+  auth_mode?: string
+  wizard_done?: boolean
 }
 
 export const fmtDate = (iso: string, tz?: string) =>

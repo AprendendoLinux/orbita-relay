@@ -26,7 +26,9 @@ export function Brand({ size = 40 }: { size?: number }) {
 
 export default function Layout({ user }: { user: User }) {
   const nav = useNavigate()
+  const { branding } = useBranding()
   const admin = user.role === 'admin'
+  const smarthost = branding?.relay_mode === 'smarthost'
   const logout = async () => {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {})
     nav(0)
@@ -42,8 +44,9 @@ export default function Layout({ user }: { user: User }) {
             {admin && (
               <>
                 <div className="sep">Administração</div>
-                <NavLink to="/dominios">⌖ Domínios e DKIM</NavLink>
+                {!smarthost && <NavLink to="/dominios">⌖ Domínios e DKIM</NavLink>}
                 <NavLink to="/admin/configuracoes">⚙ Configurações</NavLink>
+                <NavLink to="/assistente">✦ Assistente</NavLink>
                 <NavLink to="/admin/usuarios">☺ Usuários</NavLink>
                 <NavLink to="/admin/auditoria">☰ Auditoria</NavLink>
               </>

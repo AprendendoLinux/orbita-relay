@@ -2,20 +2,22 @@ name: orbitarelay
 
 services:
   db:
-    image: postgres:17-alpine
+    image: mysql:latest
     restart: unless-stopped
     environment:
-      POSTGRES_USER: orbita
-      POSTGRES_DB: orbita
-      POSTGRES_PASSWORD: ${ORBITA_DB_PASSWORD:-orbita}
+      MYSQL_DATABASE: orbita
+      MYSQL_USER: orbita
+      MYSQL_PASSWORD: ${ORBITA_DB_PASSWORD:-orbita}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - dbdata:/var/lib/mysql
     networks: [orbita]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U orbita -d orbita"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uorbita -p$$MYSQL_PASSWORD --silent"]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
+      start_period: 20s
 
   app:
     build:
@@ -57,7 +59,7 @@ networks:
         - subnet: fd00:0:0:28::/64
 
 volumes:
-  pgdata:
+  dbdata:
   app-data:
   mta-config:
   mta-logs:

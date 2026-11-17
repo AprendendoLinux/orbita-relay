@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { useBranding } from '../branding'
+import FieldInput, { visible, type Field, type Vals } from '../components/FieldInput'
 
-type Field = {
-  key: string; group: string; label: string; help?: string; type: string
-  options?: string[]; value: unknown; secret?: boolean; has_value?: boolean
-}
 type Resp = { groups: { id: string; label: string }[]; fields: Field[] }
 
 export default function Settings() {
   const { refresh } = useBranding()
   const [data, setData] = useState<Resp | null>(null)
-  const [vals, setVals] = useState<Record<string, unknown>>({})
+  const [vals, setVals] = useState<Vals>({})
   const [tab, setTab] = useState('geral')
   const [msg, setMsg] = useState<{ t: 'ok' | 'err'; s: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -27,8 +25,8 @@ export default function Settings() {
     if (!data) return
     setBusy(true)
     setMsg(null)
-    const body: Record<string, unknown> = {}
-    for (const f of data.fields.filter((x) => x.group === tab)) body[f.key] = vals[f.key]
+    const body: Vals = {}
+    for (const f of data.fields) body[f.key] = vals[f.key]
     try {
       await api('/api/admin/settings', { method: 'PUT', body })
       setMsg({ t: 'ok', s: 'Configurações salvas. O relay recarrega a configuração automaticamente.' })
@@ -52,54 +50,31 @@ export default function Settings() {
   }
 
   if (!data) return <p className="muted">Carregando…</p>
-  const fields = data.fields.filter((f) => f.group === tab)
+  const groups = data.groups.filter((g) => data.fields.some((f) => f.group === g.id && visible(f, vals)))
+  const current = groups.some((g) => g.id === tab) ? tab : groups[0]?.id
+  const fields = data.fields.filter((f) => f.group === current && visible(f, vals))
 
   return (
     <>
-      <div className="topbar"><h1>Configurações</h1></div>
+      <div className="topbar">
+        <h1>Configurações</h1>
+        <Link className="btn primary" to="/assistente">✦ Alterar com o assistente</Link>
+      </div>
       <div className="tabs" role="tablist">
-        {data.groups.map((g) => (
-          <button key={g.id} role="tab" className={tab === g.id ? 'on' : ''} onClick={() => { setTab(g.id); setMsg(null) }}>{g.label}</button>
+        {groups.map((g) => (
+          <button key={g.id} role="tab" className={current === g.id ? 'on' : ''} onClick={() => { setTab(g.id); setMsg(null) }}>{g.label}</button>
         ))}
       </div>
       <div className="glass card stack">
         <div className="form-grid">
-          {fields.map((f) => {
-            const v = vals[f.key]
-            const set = (x: unknown) => setVals({ ...vals, [f.key]: x })
-            if (f.type === 'bool')
-              return (
-                <label key={f.key} className="check" style={{ alignSelf: 'end' }}>
-                  <input type="checkbox" checked={v === true} onChange={(e) => set(e.target.checked)} /> {f.label}
-                </label>
-              )
-            return (
-              <label key={f.key} className="f" style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-                {f.label}
-                {f.type === 'select' ? (
-                  <select value={String(v)} onChange={(e) => set(e.target.value)}>
-                    {f.options?.map((o) => <option key={o}>{o}</option>)}
-                  </select>
-                ) : f.type === 'textarea' ? (
-                  <textarea value={String(v ?? '')} onChange={(e) => set(e.target.value)} />
-                ) : (
-                  <input
-                    type={f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text'}
-                    value={String(v ?? '')}
-                    placeholder={f.secret && f.has_value ? '•••••••• (mantida)' : ''}
-                    autoComplete="off"
-                    onChange={(e) => set(e.target.value)}
-                  />
-                )}
-                {f.help && <span className="help">{f.help}</span>}
-              </label>
-            )
-          })}
+          {fields.map((f) => (
+            <FieldInput key={f.key} f={f} v={vals[f.key]} set={(x) => setVals({ ...vals, [f.key]: x })} />
+          ))}
         </div>
         {msg && <div className={`alert ${msg.t}`} role="status">{msg.s}</div>}
         <div className="row">
           <button className="primary" onClick={save} disabled={busy}>{busy ? 'Salvando…' : 'Salvar'}</button>
-          {tab === 'ldap' && <button onClick={testLdap}>Testar conexão LDAP</button>}
+          {current === 'ldap' && vals.auth_mode === 'ldap' && <button onClick={testLdap}>Testar conexão LDAP</button>}
         </div>
       </div>
     </>

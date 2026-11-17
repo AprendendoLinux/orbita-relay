@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var version = "0.1.0"
@@ -24,7 +25,7 @@ type App struct {
 	key       []byte
 
 	mu       sync.RWMutex
-	db       *pgxpool.Pool
+	db       *sql.DB
 	settings map[string]any
 
 	setupToken string
@@ -63,7 +64,7 @@ func (a *App) ready() bool {
 	return a.db != nil
 }
 
-func (a *App) activate(ctx context.Context, pool *pgxpool.Pool) error {
+func (a *App) activate(ctx context.Context, pool *sql.DB) error {
 	a.mu.Lock()
 	a.db = pool
 	a.settings = map[string]any{}
@@ -145,6 +146,9 @@ func (a *App) handleBranding(w http.ResponseWriter, r *http.Request) {
 	if a.ready() {
 		out["app_name"] = a.sStr("app_name")
 		out["timezone"] = a.sStr("timezone")
+		out["relay_mode"] = a.sStr("relay_mode")
+		out["auth_mode"] = a.sStr("auth_mode")
+		out["wizard_done"] = a.sBool("wizard_done")
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, out)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -87,12 +87,12 @@ func isHTTPS(r *http.Request) bool {
 func (a *App) createSession(ctx context.Context, w http.ResponseWriter, r *http.Request, uid int64) error {
 	tok := randomToken(32)
 	exp := time.Now().Add(sessionTTL)
-	_, err := a.db.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at,ip) VALUES($1,$2,$3,$4)`,
+	_, err := a.exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at,ip) VALUES(?,?,?,?)`,
 		hashToken(tok), uid, exp, clientIP(r))
 	if err != nil {
 		return err
 	}
-	_, _ = a.db.Exec(ctx, `UPDATE users SET last_login=now() WHERE id=$1`, uid)
+	_, _ = a.exec(ctx, `UPDATE users SET last_login=UTC_TIMESTAMP(6) WHERE id=?`, uid)
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieName, Value: tok, Path: "/", Expires: exp,
 		HttpOnly: true, Secure: isHTTPS(r), SameSite: http.SameSiteStrictMode,
@@ -106,10 +106,10 @@ func (a *App) userFromRequest(r *http.Request) *User {
 		return nil
 	}
 	var u User
-	err = a.db.QueryRow(r.Context(), `
+	err = a.row(r.Context(), `
 		SELECT u.id,u.username,u.display_name,u.email,u.role,u.source,u.disabled,u.created_at,u.last_login
 		FROM sessions s JOIN users u ON u.id=s.user_id
-		WHERE s.token_hash=$1 AND s.expires_at>now() AND NOT u.disabled`, hashToken(c.Value)).
+		WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(6) AND u.disabled=0`, hashToken(c.Value)).
 		Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Role, &u.Source, &u.Disabled, &u.CreatedAt, &u.LastLogin)
 	if err != nil {
 		return nil
@@ -197,7 +197,7 @@ func (a *App) authenticate(ctx context.Context, username, password string) (int6
 	var hash *string
 	var source string
 	var disabled bool
-	err := a.db.QueryRow(ctx, `SELECT id,password_hash,source,disabled FROM users WHERE lower(username)=lower($1)`, username).
+	err := a.row(ctx, `SELECT id,password_hash,source,disabled FROM users WHERE lower(username)=lower(?)`, username).
 		Scan(&id, &hash, &source, &disabled)
 	if err == nil && source == "local" && hash != nil {
 		if disabled {
@@ -208,10 +208,10 @@ func (a *App) authenticate(ctx context.Context, username, password string) (int6
 		}
 		return 0, false
 	}
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return 0, false
 	}
-	if !a.sBool("ldap_enabled") {
+	if a.sStr("auth_mode") != "ldap" {
 		_ = bcrypt.CompareHashAndPassword([]byte("$2a$12$0000000000000000000000000000000000000000000000000000"), []byte(password))
 		return 0, false
 	}
@@ -226,19 +226,23 @@ func (a *App) authenticate(ctx context.Context, username, password string) (int6
 	if info.admin {
 		role = "admin"
 	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = a.db.QueryRow(ctx, `INSERT INTO users(username,display_name,email,role,source) VALUES($1,$2,$3,$4,'ldap')
-			ON CONFLICT (username) DO UPDATE SET display_name=EXCLUDED.display_name RETURNING id`,
-			username, info.name, info.mail, role).Scan(&id)
-		return id, err == nil
+	if errors.Is(err, sql.ErrNoRows) {
+		res, ierr := a.exec(ctx, `INSERT INTO users(username,display_name,email,role,source) VALUES(?,?,?,?,'ldap')
+			ON DUPLICATE KEY UPDATE display_name=VALUES(display_name), id=LAST_INSERT_ID(id)`,
+			username, info.name, info.mail, role)
+		if ierr != nil {
+			return 0, false
+		}
+		id, _ = res.LastInsertId()
+		return id, id > 0
 	}
-	_, _ = a.db.Exec(ctx, `UPDATE users SET display_name=$2,email=$3,role=$4 WHERE id=$1`, id, info.name, info.mail, role)
+	_, _ = a.exec(ctx, `UPDATE users SET display_name=?,email=?,role=? WHERE id=?`, info.name, info.mail, role, id)
 	return id, true
 }
 
 func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(cookieName); err == nil && a.ready() {
-		_, _ = a.db.Exec(r.Context(), `DELETE FROM sessions WHERE token_hash=$1`, hashToken(c.Value))
+		_, _ = a.exec(r.Context(), `DELETE FROM sessions WHERE token_hash=?`, hashToken(c.Value))
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -266,7 +270,7 @@ func (a *App) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var hash string
-	if err := a.db.QueryRow(r.Context(), `SELECT password_hash FROM users WHERE id=$1`, u.ID).Scan(&hash); err != nil ||
+	if err := a.row(r.Context(), `SELECT password_hash FROM users WHERE id=?`, u.ID).Scan(&hash); err != nil ||
 		bcrypt.CompareHashAndPassword([]byte(hash), []byte(in.Current)) != nil {
 		writeErr(w, 400, "senha atual incorreta")
 		return
@@ -276,15 +280,15 @@ func (a *App) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "falha ao processar senha")
 		return
 	}
-	_, _ = a.db.Exec(r.Context(), `UPDATE users SET password_hash=$2 WHERE id=$1`, u.ID, nh)
+	_, _ = a.exec(r.Context(), `UPDATE users SET password_hash=? WHERE id=?`, nh, u.ID)
 	c, _ := r.Cookie(cookieName)
-	_, _ = a.db.Exec(r.Context(), `DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2`, u.ID, hashToken(c.Value))
+	_, _ = a.exec(r.Context(), `DELETE FROM sessions WHERE user_id=? AND token_hash<>?`, u.ID, hashToken(c.Value))
 	a.audit(r.Context(), u.Username, "user.password", "")
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(r.Context(), `SELECT id,username,display_name,email,role,source,disabled,created_at,last_login FROM users ORDER BY username`)
+	rows, err := a.query(r.Context(), `SELECT id,username,display_name,email,role,source,disabled,created_at,last_login FROM users ORDER BY username`)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -326,7 +330,7 @@ func (a *App) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "falha ao processar senha")
 		return
 	}
-	_, err = a.db.Exec(r.Context(), `INSERT INTO users(username,display_name,email,role,password_hash) VALUES($1,$2,$3,$4,$5)`,
+	_, err = a.exec(r.Context(), `INSERT INTO users(username,display_name,email,role,password_hash) VALUES(?,?,?,?,?)`,
 		in.Username, in.DisplayName, in.Email, in.Role, h)
 	if err != nil {
 		writeErr(w, 409, "usuário já existe")
@@ -350,7 +354,7 @@ func (a *App) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	me := userFrom(r)
 	var target User
-	if err := a.db.QueryRow(r.Context(), `SELECT id,username,source FROM users WHERE id=$1`, id).Scan(&target.ID, &target.Username, &target.Source); err != nil {
+	if err := a.row(r.Context(), `SELECT id,username,source FROM users WHERE id=?`, id).Scan(&target.ID, &target.Username, &target.Source); err != nil {
 		writeErr(w, 404, "usuário não encontrado")
 		return
 	}
@@ -360,22 +364,22 @@ func (a *App) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	if in.DisplayName != nil {
-		_, _ = a.db.Exec(ctx, `UPDATE users SET display_name=$2 WHERE id=$1`, id, *in.DisplayName)
+		_, _ = a.exec(ctx, `UPDATE users SET display_name=? WHERE id=?`, *in.DisplayName, id)
 	}
 	if in.Email != nil {
-		_, _ = a.db.Exec(ctx, `UPDATE users SET email=$2 WHERE id=$1`, id, *in.Email)
+		_, _ = a.exec(ctx, `UPDATE users SET email=? WHERE id=?`, *in.Email, id)
 	}
 	if in.Role != nil {
 		if roleRank[*in.Role] == 0 {
 			writeErr(w, 400, "perfil inválido")
 			return
 		}
-		_, _ = a.db.Exec(ctx, `UPDATE users SET role=$2 WHERE id=$1`, id, *in.Role)
+		_, _ = a.exec(ctx, `UPDATE users SET role=? WHERE id=?`, *in.Role, id)
 	}
 	if in.Disabled != nil {
-		_, _ = a.db.Exec(ctx, `UPDATE users SET disabled=$2 WHERE id=$1`, id, *in.Disabled)
+		_, _ = a.exec(ctx, `UPDATE users SET disabled=? WHERE id=?`, *in.Disabled, id)
 		if *in.Disabled {
-			_, _ = a.db.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id)
+			_, _ = a.exec(ctx, `DELETE FROM sessions WHERE user_id=?`, id)
 		}
 	}
 	if in.Password != nil && *in.Password != "" {
@@ -388,8 +392,8 @@ func (a *App) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h, _ := hashPassword(*in.Password)
-		_, _ = a.db.Exec(ctx, `UPDATE users SET password_hash=$2 WHERE id=$1`, id, h)
-		_, _ = a.db.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id)
+		_, _ = a.exec(ctx, `UPDATE users SET password_hash=? WHERE id=?`, h, id)
+		_, _ = a.exec(ctx, `DELETE FROM sessions WHERE user_id=?`, id)
 	}
 	a.audit(ctx, me.Username, "user.update", target.Username)
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -399,7 +403,7 @@ func (a *App) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	me := userFrom(r)
 	var name string
-	if err := a.db.QueryRow(r.Context(), `SELECT username FROM users WHERE id=$1`, id).Scan(&name); err != nil {
+	if err := a.row(r.Context(), `SELECT username FROM users WHERE id=?`, id).Scan(&name); err != nil {
 		writeErr(w, 404, "usuário não encontrado")
 		return
 	}
@@ -407,13 +411,13 @@ func (a *App) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "você não pode excluir a si mesmo")
 		return
 	}
-	_, _ = a.db.Exec(r.Context(), `DELETE FROM users WHERE id=$1`, id)
+	_, _ = a.exec(r.Context(), `DELETE FROM users WHERE id=?`, id)
 	a.audit(r.Context(), me.Username, "user.delete", name)
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 func (a *App) handleAudit(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.db.Query(r.Context(), `SELECT at,username,action,detail FROM audit_log ORDER BY at DESC LIMIT 200`)
+	rows, err := a.query(r.Context(), `SELECT at,username,action,detail FROM audit_log ORDER BY at DESC LIMIT 200`)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return

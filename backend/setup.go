@@ -37,7 +37,7 @@ func (a *App) setupDone() bool {
 		return false
 	}
 	var n int
-	if err := a.db.QueryRow(context.Background(), `SELECT count(*) FROM users`).Scan(&n); err != nil {
+	if err := a.row(context.Background(), `SELECT count(*) FROM users`).Scan(&n); err != nil {
 		return false
 	}
 	return n > 0
@@ -72,17 +72,17 @@ func (a *App) handleSetupDB(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Port == 0 {
-		in.Port = 5432
+		in.Port = 3306
 	}
 	if in.SSLMode == "" {
-		in.SSLMode = "prefer"
+		in.SSLMode = "preferred"
 	}
 	if in.Host == "" || in.User == "" || in.Name == "" {
 		writeErr(w, 400, "informe host, usuário e nome do banco")
 		return
 	}
 	switch in.SSLMode {
-	case "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
+	case "disable", "preferred", "required", "skip-verify":
 	default:
 		writeErr(w, 400, "sslmode inválido")
 		return
@@ -140,9 +140,8 @@ func (a *App) handleSetupAdmin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "falha ao processar senha")
 		return
 	}
-	var uid int64
-	err = a.db.QueryRow(r.Context(), `INSERT INTO users(username,email,role,password_hash,display_name) VALUES($1,$2,'admin',$3,'Administrador') RETURNING id`,
-		in.Username, in.Email, h).Scan(&uid)
+	res, err := a.exec(r.Context(), `INSERT INTO users(username,email,role,password_hash,display_name) VALUES(?,?,'admin',?,'Administrador')`,
+		in.Username, in.Email, h)
 	if err != nil {
 		writeErr(w, 409, "não foi possível criar o administrador")
 		return
@@ -150,6 +149,7 @@ func (a *App) handleSetupAdmin(w http.ResponseWriter, r *http.Request) {
 	if n := strings.TrimSpace(in.AppName); n != "" && len(n) <= 60 {
 		_ = a.setRaw(r.Context(), "app_name", n)
 	}
+	uid, _ := res.LastInsertId()
 	_ = a.createSession(r.Context(), w, r, uid)
 	a.audit(r.Context(), in.Username, "setup.complete", "")
 	_ = os.Remove(filepath.Join(a.dataDir, "setup.token"))

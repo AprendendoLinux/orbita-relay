@@ -4,7 +4,7 @@ Relay SMTP (Exim) + painel de relatórios, unificando `clubenaval/relatorios-smt
 
 - **Backend:** Go (API, ingestão de logs, gerador de config do Exim)
 - **Frontend:** React + TypeScript (Vite), visual futurista com modo claro/escuro
-- **Banco:** PostgreSQL
+- **Banco:** MySQL (`mysql:latest`)
 - **MTA:** Exim 4.96 com configuração gerada pelo painel
 
 ## Subir
@@ -15,8 +15,11 @@ docker compose logs app | grep TOKEN
 ```
 
 Acesse `http://servidor:8080`, informe o token e conclua o assistente (banco + administrador).
-No banco embutido use host `db`, usuário/banco `orbita` e a senha de `ORBITA_DB_PASSWORD` (padrão `orbita`; defina em `.env`).
-É possível apontar para um PostgreSQL externo no assistente.
+No banco embutido use host `db`, porta `3306`, usuário/banco `orbita` e a senha de `ORBITA_DB_PASSWORD` (padrão `orbita`; defina em `.env`).
+É possível apontar para um MySQL externo no assistente.
+
+No primeiro login um **assistente** guia a configuração (nome, fuso, modo Relay SMTP ou Smarthost, autenticação, logs); ele pode ser reaberto em Configurações.
+No modo Smarthost o menu Domínios e DKIM fica oculto; no modo Relay SMTP o painel mostra os registros SPF, DKIM e DMARC de cada domínio.
 
 Todo o resto (LDAP, domínios, DKIM, smarthost, redes autorizadas, IPv6, retenção) é configurado no painel.
 Segredos ficam criptografados (AES-256-GCM) com a chave `/data/master.key`. **Faça backup do volume `app-data`.**
@@ -25,7 +28,7 @@ Segredos ficam criptografados (AES-256-GCM) com a chave `/data/master.key`. **Fa
 
 - Exim grava em `/var/log/exim/main.log` (volume `mta-logs`), com `+subject`, TLS e confirmação SMTP.
 - `logrotate` roda no container do MTA: diário **e** por tamanho (`maxsize`), `rotate N`, compressão. Valores editáveis no painel.
-- O painel lê o log incrementalmente (controla inode/offset, sobrevive a rotação) e grava no PostgreSQL.
+- O painel lê o log incrementalmente (controla inode/offset, sobrevive a rotação) e grava no MySQL.
 - A retenção no banco é automática (padrão 365 dias). O arquivo bruto não cresce sem limite.
 
 ## IPv6

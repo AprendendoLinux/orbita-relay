@@ -9,7 +9,7 @@ export default function Setup() {
   const { branding, refresh } = useBranding()
   const [step, setStep] = useState(branding?.db_ready ? 2 : 1)
   const [token, setToken] = useState('')
-  const [db, setDb] = useState({ host: 'db', port: '5432', user: 'orbita', password: '', name: 'orbita', sslmode: 'prefer' })
+  const [db, setDb] = useState({ host: 'db', port: '3306', user: 'orbita', password: '', name: 'orbita', sslmode: 'preferred' })
   const [adm, setAdm] = useState({ app_name: 'OrbitaRelay', username: 'admin', email: '', password: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -60,7 +60,7 @@ export default function Setup() {
               <label className="f">Token de configuração
                 <input value={token} onChange={(e) => setToken(e.target.value)} required autoFocus />
               </label>
-              <h3>Banco de dados (PostgreSQL)</h3>
+              <h3>Banco de dados (MySQL)</h3>
               <div className="form-grid">
                 <label className="f">Host<input value={db.host} onChange={(e) => setDb({ ...db, host: e.target.value })} required /></label>
                 <label className="f">Porta<input value={db.port} onChange={(e) => setDb({ ...db, port: e.target.value })} required /></label>
@@ -69,7 +69,7 @@ export default function Setup() {
                 <label className="f">Banco<input value={db.name} onChange={(e) => setDb({ ...db, name: e.target.value })} required /></label>
                 <label className="f">SSL
                   <select value={db.sslmode} onChange={(e) => setDb({ ...db, sslmode: e.target.value })}>
-                    {['disable', 'prefer', 'require', 'verify-ca', 'verify-full'].map((m) => <option key={m}>{m}</option>)}
+                    {['disable', 'preferred', 'required', 'skip-verify'].map((m) => <option key={m}>{m}</option>)}
                   </select>
                 </label>
               </div>

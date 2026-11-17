@@ -166,9 +166,10 @@ func (a *App) renderMTA(ctx context.Context) error {
 	}
 	v.RelayNets = strings.Join(nets, " ; ")
 
+	relayMode := a.sStr("relay_mode") != "smarthost"
 	dkimKeys := map[string]string{}
 	if a.ready() {
-		rows, err := a.db.Query(ctx, `SELECT domain,dkim_enabled,dkim_private FROM domains ORDER BY domain`)
+		rows, err := a.query(ctx, `SELECT domain,dkim_enabled,dkim_private FROM domains ORDER BY domain`)
 		if err != nil {
 			return err
 		}
@@ -181,7 +182,7 @@ func (a *App) renderMTA(ctx context.Context) error {
 				return err
 			}
 			all = append(all, d)
-			if en && p != "" {
+			if relayMode && en && p != "" {
 				if pem, err := a.decrypt(p); err == nil {
 					dkimKeys[d] = pem
 					signed = append(signed, d)
@@ -189,13 +190,15 @@ func (a *App) renderMTA(ctx context.Context) error {
 			}
 		}
 		rows.Close()
-		if a.sBool("enforce_sender_domains") {
-			v.SenderDomains = strings.Join(all, " ; ")
+		if relayMode {
+			if a.sBool("enforce_sender_domains") {
+				v.SenderDomains = strings.Join(all, " ; ")
+			}
+			v.DKIMDomains = strings.Join(signed, " ; ")
 		}
-		v.DKIMDomains = strings.Join(signed, " ; ")
 	}
 
-	if a.sBool("smarthost_enabled") && a.sStr("smarthost_host") != "" {
+	if !relayMode && a.sStr("smarthost_host") != "" {
 		v.Smarthost = true
 		v.SmarthostHost = a.sStr("smarthost_host")
 		if v.Port == 0 {

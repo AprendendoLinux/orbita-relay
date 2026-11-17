@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"io"
 	"log"
 	"mime"
@@ -13,8 +14,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 var (
@@ -117,61 +116,60 @@ func domainOf(addr string) string {
 	return ""
 }
 
-const upsertStub = `INSERT INTO messages(exim_id,received_at) VALUES($1,$2) ON CONFLICT (exim_id) DO NOTHING`
-
-func queueEvent(b *pgx.Batch, ev logEvent) {
+func execEvent(ctx context.Context, tx *sql.Tx, ev logEvent) error {
+	run := func(q string, args ...any) error { _, err := tx.ExecContext(ctx, q, args...); return err }
+	const stub = `INSERT IGNORE INTO messages(exim_id,received_at) VALUES(?,?)`
 	switch ev.kind {
 	case "<=":
-		b.Queue(`INSERT INTO messages(exim_id,received_at,sender,sender_domain,origin_host,origin_ip,subject,size)
-			VALUES($1,$2,$3,$4,$5,$6,$7,$8)
-			ON CONFLICT (exim_id) DO UPDATE SET received_at=EXCLUDED.received_at, sender=EXCLUDED.sender,
-			sender_domain=EXCLUDED.sender_domain, origin_host=EXCLUDED.origin_host, origin_ip=EXCLUDED.origin_ip,
-			subject=EXCLUDED.subject, size=EXCLUDED.size`,
-			ev.eximID, ev.at, clean(ev.sender), clean(domainOf(ev.sender)), clean(ev.host), clean(ev.ip), ev.subject, ev.size)
+		return run(`INSERT INTO messages(exim_id,received_at,sender,sender_domain,origin_host,origin_ip,subject,size)
+			VALUES(?,?,?,?,?,?,?,?)
+			ON DUPLICATE KEY UPDATE received_at=VALUES(received_at), sender=VALUES(sender),
+			sender_domain=VALUES(sender_domain), origin_host=VALUES(origin_host), origin_ip=VALUES(origin_ip),
+			subject=VALUES(subject), size=VALUES(size)`,
+			ev.eximID, ev.at, trunc(clean(ev.sender), 320), trunc(clean(domainOf(ev.sender)), 255),
+			trunc(clean(ev.host), 255), trunc(clean(ev.ip), 64), trunc(ev.subject, 500), ev.size)
 	case "=>", "->", "**", "==":
 		status := map[string]string{"=>": "delivered", "->": "delivered", "**": "failed", "==": "deferred"}[ev.kind]
-		b.Queue(upsertStub, ev.eximID, ev.at)
-		b.Queue(`INSERT INTO deliveries(message_id,at,recipient,status,remote_host,remote_ip,detail)
-			SELECT id,$2,$3,$4,$5,$6,$7 FROM messages WHERE exim_id=$1`,
-			ev.eximID, ev.at, clean(ev.rcpt), status, clean(ev.rhost), clean(ev.rip), ev.detail)
+		if err := run(stub, ev.eximID, ev.at); err != nil {
+			return err
+		}
+		if err := run(`INSERT INTO deliveries(message_id,at,recipient,status,remote_host,remote_ip,detail)
+			SELECT id,?,?,?,?,?,? FROM messages WHERE exim_id=?`,
+			ev.at, trunc(clean(ev.rcpt), 320), status, trunc(clean(ev.rhost), 255), trunc(clean(ev.rip), 64), ev.detail, ev.eximID); err != nil {
+			return err
+		}
 		switch status {
 		case "failed":
-			b.Queue(`UPDATE messages SET status='failed' WHERE exim_id=$1`, ev.eximID)
+			return run(`UPDATE messages SET status='failed' WHERE exim_id=?`, ev.eximID)
 		case "deferred":
-			b.Queue(`UPDATE messages SET status='deferred' WHERE exim_id=$1 AND status='queued'`, ev.eximID)
+			return run(`UPDATE messages SET status='deferred' WHERE exim_id=? AND status='queued'`, ev.eximID)
 		}
 	case "Completed":
-		b.Queue(upsertStub, ev.eximID, ev.at)
-		b.Queue(`UPDATE messages SET completed_at=$2, status=CASE WHEN EXISTS
+		if err := run(stub, ev.eximID, ev.at); err != nil {
+			return err
+		}
+		return run(`UPDATE messages SET completed_at=?, status=CASE WHEN EXISTS
 			(SELECT 1 FROM deliveries d WHERE d.message_id=messages.id AND d.status='failed') THEN 'failed' ELSE 'delivered' END
-			WHERE exim_id=$1`, ev.eximID, ev.at)
+			WHERE exim_id=?`, ev.at, ev.eximID)
 	}
+	return nil
 }
 
 func (a *App) flush(ctx context.Context, evs []logEvent) error {
 	if len(evs) == 0 {
 		return nil
 	}
-	b := &pgx.Batch{}
-	for _, ev := range evs {
-		queueEvent(b, ev)
-	}
-	tx, err := a.db.Begin(ctx)
+	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
-	res := tx.SendBatch(ctx, b)
-	for i := 0; i < b.Len(); i++ {
-		if _, err := res.Exec(); err != nil {
-			res.Close()
+	defer tx.Rollback()
+	for _, ev := range evs {
+		if err := execEvent(ctx, tx, ev); err != nil {
 			return err
 		}
 	}
-	if err := res.Close(); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return tx.Commit()
 }
 
 func (a *App) readFrom(ctx context.Context, path string, offset int64) (int64, error) {
@@ -223,8 +221,8 @@ func (a *App) ingestOnce(ctx context.Context) error {
 		return nil
 	}
 	var ino, off int64
-	err = a.db.QueryRow(ctx, `SELECT inode,off FROM ingest_state WHERE file='main'`).Scan(&ino, &off)
-	if err != nil && err != pgx.ErrNoRows {
+	err = a.row(ctx, `SELECT inode,pos FROM ingest_state WHERE file='main'`).Scan(&ino, &off)
+	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 	cur := inodeOf(fi)
@@ -240,8 +238,8 @@ func (a *App) ingestOnce(ctx context.Context) error {
 		off = 0
 	}
 	newOff, err := a.readFrom(ctx, path, off)
-	_, e2 := a.db.Exec(ctx, `INSERT INTO ingest_state(file,inode,off) VALUES('main',$1,$2)
-		ON CONFLICT (file) DO UPDATE SET inode=EXCLUDED.inode, off=EXCLUDED.off`, cur, newOff)
+	_, e2 := a.exec(ctx, `INSERT INTO ingest_state(file,inode,pos) VALUES('main',?,?)
+		ON DUPLICATE KEY UPDATE inode=VALUES(inode), pos=VALUES(pos)`, cur, newOff)
 	if err != nil {
 		return err
 	}
