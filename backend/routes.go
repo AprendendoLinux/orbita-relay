@@ -64,6 +64,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("POST /api/admin/nodes/{id}/token", a.auth("admin", a.handleRotateNode))
 	mux.HandleFunc("DELETE /api/admin/nodes/{id}", a.auth("admin", a.handleDeleteNode))
 	mux.HandleFunc("POST /api/admin/collect/test", a.auth("admin", a.handleCollectTest))
+	mux.HandleFunc("GET /api/admin/ipv6", a.auth("admin", a.handleIPv6Status))
 	mux.HandleFunc("GET /api/admin/collect/status", a.auth("admin", a.handleCollectStatus))
 
 	mux.HandleFunc("GET /api/admin/domains", a.auth("admin", a.handleListDomains))

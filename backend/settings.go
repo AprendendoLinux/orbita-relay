@@ -56,7 +56,7 @@ var settingFields = []Field{
 	{Key: "collect_interval", Group: "coleta", Label: "Intervalo de envio (segundos)", Type: "number", Default: 10, Depends: "deploy_mode=client"},
 	{Key: "relay_mode", Group: "mta", Label: "Modo de operação", Type: "select", Default: "relay", Options: []string{"relay", "smarthost"}, Help: "relay = entrega direta (domínios, DKIM, SPF, DMARC); smarthost = encaminha por outro servidor SMTP"},
 	{Key: "mta_hostname", Group: "mta", Label: "Hostname do relay (HELO)", Type: "text", Default: "", Help: "Vazio usa o hostname do container"},
-	{Key: "relay_nets", Group: "mta", Label: "Redes autorizadas a enviar", Type: "textarea", Default: "127.0.0.1\n::1\n10.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\nfd00::/8", Help: "Um IP ou CIDR (IPv4/IPv6) por linha"},
+	{Key: "relay_nets", Group: "mta", Label: "Redes autorizadas a enviar", Type: "textarea", Default: "127.0.0.1\n::1\n10.0.0.0/8\n192.168.0.0/16\nfd00::/8", Help: "Um IP ou CIDR (IPv4/IPv6) por linha"},
 	{Key: "enforce_sender_domains", Group: "mta", Label: "Restringir remetentes aos domínios cadastrados", Type: "bool", Default: true, Depends: "relay_mode=relay"},
 	{Key: "ip_mode", Group: "mta", Label: "Modo IP", Type: "select", Default: "dual", Options: []string{"dual", "ipv4"}, Help: "dual = IPv4 + IPv6"},
 	{Key: "max_message_mb", Group: "mta", Label: "Tamanho máximo da mensagem (MB)", Type: "number", Default: 25},

@@ -5,6 +5,7 @@ import { useBranding } from '../branding'
 import FieldInput, { applyChange, visible, type Field, type Vals } from '../components/FieldInput'
 import CollectPanel from '../components/CollectPanel'
 import Tip from '../components/Tip'
+import Ipv6Panel from '../components/Ipv6Panel'
 
 type Resp = { groups: { id: string; label: string }[]; fields: Field[] }
 
@@ -79,6 +80,7 @@ export default function Settings() {
         {current === 'geral' && vals.deploy_mode === 'client' && (
           <Tip title="Cliente">Os dados do servidor central ficam na aba “Envio para o servidor central”.</Tip>
         )}
+        {current === 'mta' && vals.ip_mode === 'dual' && <Ipv6Panel />}
         {current === 'coleta' && (
           <>
             {vals.collect_scheme === 'http' && <div className="alert warn">Com HTTP o token e os dados trafegam sem criptografia. Use apenas em redes confiáveis.</div>}

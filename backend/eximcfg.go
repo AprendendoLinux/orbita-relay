@@ -17,6 +17,7 @@ type eximView struct {
 	Hostname      string
 	IPv4Only      bool
 	RelayNets     string
+	Gateways      string
 	MaxMB         int
 	SenderDomains string
 	DKIMDomains   string
@@ -47,7 +48,8 @@ local_interfaces = <; 0.0.0.0
 {{end}}daemon_smtp_ports = 25 : 587
 domainlist local_domains = @
 hostlist relay_from_hosts = <; {{.RelayNets}}
-acl_smtp_mail = acl_check_mail
+{{if .Gateways}}hostlist docker_gateways = <; {{.Gateways}}
+{{end}}acl_smtp_mail = acl_check_mail
 acl_smtp_rcpt = acl_check_rcpt
 message_size_limit = {{.MaxMB}}M
 smtp_accept_max = 200
@@ -62,7 +64,9 @@ tls_privatekey = /etc/exim4/tls/key.pem
 begin acl
 
 acl_check_mail:
-  deny    message = Relay not permitted
+{{if .Gateways}}  deny    message = Connection through Docker gateway refused (source IP masked)
+          hosts = +docker_gateways
+{{end}}  deny    message = Relay not permitted
           !hosts = +relay_from_hosts
   accept  senders = :
 {{if .SenderDomains}}  deny    message = Sender domain not allowed: $sender_address_domain
@@ -165,6 +169,7 @@ func (a *App) renderMTA(ctx context.Context) error {
 		nets = []string{"127.0.0.1", "::1"}
 	}
 	v.RelayNets = strings.Join(nets, " ; ")
+	v.Gateways = strings.Join(dockerGateways(), " ; ")
 
 	relayMode := a.sStr("relay_mode") != "smarthost"
 	dkimKeys := map[string]string{}

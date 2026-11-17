@@ -22,11 +22,13 @@ services:
       start_period: 20s
 
   app:
-    image: ghcr.io/aprendendolinux/orbita-relay-app:1.1.0
+    image: ghcr.io/aprendendolinux/orbita-relay-app:1.2.0
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      dockerproxy:
+        condition: service_started
     environment:
       ORBITA_DB_HOST: db
       ORBITA_DB_PORT: "3306"
@@ -34,6 +36,7 @@ services:
       ORBITA_DB_USER: orbita
       ORBITA_DB_PASSWORD: orbita
       ORBITA_DB_SSL: preferred
+      ORBITA_DOCKER_API: http://dockerproxy:2375
     ports:
       - "8080:8080"
     volumes:
@@ -43,9 +46,11 @@ services:
     networks: [orbita]
 
   mta:
-    image: ghcr.io/aprendendolinux/orbita-relay-mta:1.1.0
+    image: ghcr.io/aprendendolinux/orbita-relay-mta:1.2.0
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "25:25"
+      - "587:587"
     environment:
       TZ: America/Sao_Paulo
     volumes:
@@ -53,6 +58,21 @@ services:
       - mta-logs:/var/log/exim
       - mta-spool:/var/spool/exim4
       - mta-tls:/etc/exim4/tls
+    networks: [orbita]
+
+  # Proxy somente leitura da API do Docker: expõe apenas versão, info e redes, para o painel
+  # diagnosticar o IPv6. Para desativar, remova este serviço e a variável ORBITA_DOCKER_API do app.
+  dockerproxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      VERSION: "1"
+      INFO: "1"
+      NETWORKS: "1"
+      POST: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [orbita]
 
 networks:
   orbita:
