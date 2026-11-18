@@ -4,7 +4,7 @@ import { useDialog } from '../components/Dialog'
 
 type Domain = {
   id: number; domain: string; dkim_enabled: boolean; dkim_record?: string; dkim_host?: string
-  spf_record: string; dmarc_host: string; dmarc_record: string
+  spf_record: string; spf_note?: string; dmarc_host: string; dmarc_record: string
 }
 type Check = { ok: boolean; found: string[] | null; detail: string }
 type Checks = { spf: Check; dmarc: Check; dkim: Check }
@@ -113,7 +113,7 @@ export default function Domains({ embedded = false, selector, version = 0 }: { e
                 </div>
               </div>
               <div className="grid cols-2">
-                <Record title="SPF" host={d.domain} value={d.spf_record} check={c?.spf} note="Se já existir um SPF, mescle os mecanismos em um único registro." />
+                <Record title="SPF" host={d.domain} value={d.spf_record} check={c?.spf} note={`${d.spf_note ? d.spf_note + ' ' : ''}Se já existir um SPF, mescle os mecanismos em um único registro.`} />
                 <Record title="DKIM" host={dkimHost(d)} stale={selector !== undefined && selector !== '' && !!d.dkim_host && !d.dkim_host.startsWith(selector + '.')} value={d.dkim_record} check={c?.dkim} />
                 <Record title="DMARC" host={d.dmarc_host} value={d.dmarc_record} check={c?.dmarc} note="Comece com p=none e endureça após monitorar os relatórios." />
               </div>

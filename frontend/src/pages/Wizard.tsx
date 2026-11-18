@@ -63,7 +63,7 @@ export default function Wizard({ first }: { first: boolean }) {
     setErr('')
     try {
       const body: Vals = {}
-      for (const k of ['dkim_selector', 'public_ips', 'dmarc_policy', 'dmarc_rua']) body[k] = vals[k]
+      for (const k of ['mta_hostname', 'dkim_selector', 'public_ips', 'dmarc_policy', 'dmarc_rua']) body[k] = vals[k]
       await api('/api/admin/settings', { method: 'PUT', body })
       setDomVer((n) => n + 1)
     } catch (e) {

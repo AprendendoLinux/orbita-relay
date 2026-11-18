@@ -22,6 +22,7 @@ type Domain struct {
 	DKIMRecord  string    `json:"dkim_record,omitempty"`
 	DKIMHost    string    `json:"dkim_host,omitempty"`
 	SPFRecord   string    `json:"spf_record"`
+	SPFNote     string    `json:"spf_note"`
 	DMARCHost   string    `json:"dmarc_host"`
 	DMARCRecord string    `json:"dmarc_record"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -47,7 +48,7 @@ func (a *App) handleListDomains(w http.ResponseWriter, r *http.Request) {
 			d.DKIMRecord = "v=DKIM1; k=rsa; p=" + pub
 		}
 		d.DMARCHost = "_dmarc." + d.Domain
-		d.SPFRecord = a.spfRecord()
+		d.SPFRecord, d.SPFNote = a.spfRecord(r.Context(), d.Domain)
 		d.DMARCRecord = a.dmarcRecord()
 		out = append(out, d)
 	}
@@ -199,7 +200,7 @@ func (a *App) handleCheckDomain(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"spf": spf, "dmarc": dmarc, "dkim": dkim})
 }
 
-func (a *App) spfRecord() string {
+func (a *App) spfRecord(ctx context.Context, domain string) (string, string) {
 	var parts []string
 	for _, l := range strings.Split(a.sStr("public_ips"), "\n") {
 		l = strings.TrimSpace(l)
@@ -211,14 +212,29 @@ func (a *App) spfRecord() string {
 			}
 		}
 	}
+	note := "Usa os IPs públicos de saída configurados."
 	if len(parts) == 0 {
-		if h := a.sStr("mta_hostname"); h != "" {
-			parts = append(parts, "a:"+h)
+		host := a.sStr("mta_hostname")
+		if host != "" {
+			parts = append(parts, "a:"+host)
+			note = "Usa o IP do hostname do relay (" + host + "), detectado pelo DNS."
 		} else {
-			parts = append(parts, "ip4:IP_DO_SERVIDOR")
+			parts = append(parts, "a:"+domain)
+			lc, cancel := context.WithTimeout(ctx, 2*time.Second)
+			ips, err := net.DefaultResolver.LookupNetIP(lc, "ip", domain)
+			cancel()
+			if err == nil && len(ips) > 0 {
+				var ss []string
+				for _, ip := range ips {
+					ss = append(ss, ip.Unmap().String())
+				}
+				note = "Autoriza o IP do próprio domínio (" + strings.Join(ss, ", ") + "), detectado pelo DNS."
+			} else {
+				note = "Atenção: " + domain + " ainda não tem registro A/AAAA no DNS. Informe os IPs públicos de saída em Configurações > Entrega e DNS."
+			}
 		}
 	}
-	return "v=spf1 " + strings.Join(parts, " ") + " ~all"
+	return "v=spf1 " + strings.Join(parts, " ") + " ~all", note
 }
 
 func (a *App) dmarcRecord() string {
