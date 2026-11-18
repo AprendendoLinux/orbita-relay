@@ -184,6 +184,7 @@ Cada usuário, local ou do LDAP/AD, ativa o 2FA em **Segurança (2FA)**:
 Em **Configurações > Servidor de e-mail**, a opção **Incluir automaticamente as redes detectadas** (ligada por padrão) soma à lista manual: o loopback, a rede Docker em que o contêiner está (IPv4 e IPv6, lida das interfaces dele) e os IPs da máquina conhecidos. A lista detectada aparece na própria tela e é recalculada ao iniciar e ao salvar.
 
 - Dentro do contêiner só é possível ver as interfaces dele. O IP da máquina é aprendido quando você acessa o painel por ele (ex.: `http://192.168.4.129:8080`) ou informado na variável `ORBITA_HOST_IPS` do serviço `orbitarelay-app` (separe por vírgula; aceita IP ou CIDR).
+- O campo **Redes autorizadas a enviar** já abre (em instalações novas) com as redes detectadas, e o botão **Adicionar as redes detectadas ao campo** as lista explicitamente nas instalações existentes. Há também sugestões (outras redes Docker, IP do host em cada rede e IPs do nome DNS usado no painel) e um campo para colar os IPs da máquina (`hostname -I`).
 - Conexões que chegam pelo gateway do Docker (IP mascarado) continuam sendo recusadas, mesmo dentro de uma rede autorizada.
 
 ## Ocultar falhas (caixa inexistente e rejeições do Rspamd)

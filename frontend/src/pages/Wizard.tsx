@@ -9,6 +9,8 @@ import CollectPanel from '../components/CollectPanel'
 import Tip from '../components/Tip'
 import Ipv6Panel from '../components/Ipv6Panel'
 import HostSendTip from '../components/HostSendTip'
+import NetDetect from '../components/NetDetect'
+import { mergeLines } from '../lib'
 
 const stepLabels: Record<string, string> = {
   nome: 'Nome', fuso: 'Fuso horário', impl: 'Implantação', central: 'Servidor central',
@@ -189,6 +191,7 @@ export default function Wizard({ first }: { first: boolean }) {
                   {mode === 'relay' && <>{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}</>}
                   {mode === 'smarthost' && <>{F('smarthost_host')}{F('smarthost_port')}{F('smarthost_tls')}{F('smarthost_user')}{F('smarthost_pass')}</>}
                 </div>
+                <NetDetect auto={vals.relay_nets_auto === true} version={0} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />
                 <HostSendTip />
                 {vals.ip_mode === 'dual' && <Ipv6Panel />}
               </>

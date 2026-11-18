@@ -372,6 +372,11 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		} else {
 			f.Value = a.sGet(f.Key)
 		}
+		if f.Key == "relay_nets" {
+			if _, saved := a.raw("relay_nets"); !saved {
+				f.Value = a.mergedRelayNetsText()
+			}
+		}
 		out = append(out, f)
 	}
 	writeJSON(w, 200, map[string]any{"groups": settingGroups, "fields": out})

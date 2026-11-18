@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/netip"
 	"os"
 	"sort"
 	"strings"
+	"time"
 )
 
 type detNet struct {
@@ -149,5 +151,108 @@ func (a *App) handleDetectNets(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, 200, map[string]any{"auto": a.sBool("relay_nets_auto"), "items": a.detectedNets(), "effective": a.effectiveRelayNets()})
+	items := a.detectedNets()
+	have := map[string]bool{}
+	for _, d := range items {
+		have[d.CIDR] = true
+	}
+	writeJSON(w, 200, map[string]any{"auto": a.sBool("relay_nets_auto"), "items": items, "suggestions": a.suggestedNets(r.Context(), r, have), "effective": a.effectiveRelayNets()})
+}
+
+type dockerNet struct {
+	Name, Driver string
+	Subnets      []string
+	Gateways     []string
+}
+
+func dockerNetworks(ctx context.Context) []dockerNet {
+	base := strings.TrimRight(os.Getenv("ORBITA_DOCKER_API"), "/")
+	if base == "" {
+		return nil
+	}
+	var raw []struct {
+		Name   string
+		Driver string
+		IPAM   struct {
+			Config []struct{ Subnet, Gateway string }
+		}
+	}
+	if dockerGet(ctx, base, "/networks", &raw) != nil {
+		return nil
+	}
+	var out []dockerNet
+	for _, n := range raw {
+		if n.Driver == "host" || n.Driver == "null" {
+			continue
+		}
+		dn := dockerNet{Name: n.Name, Driver: n.Driver}
+		for _, c := range n.IPAM.Config {
+			if p, err := netip.ParsePrefix(c.Subnet); err == nil {
+				dn.Subnets = append(dn.Subnets, p.Masked().String())
+			}
+			if g, err := netip.ParseAddr(c.Gateway); err == nil {
+				dn.Gateways = append(dn.Gateways, g.String())
+			}
+		}
+		if len(dn.Subnets) > 0 {
+			out = append(out, dn)
+		}
+	}
+	return out
+}
+
+func (a *App) suggestedNets(ctx context.Context, r *http.Request, have map[string]bool) []detNet {
+	var out []detNet
+	add := func(c, label, src string) {
+		if c != "" && !have[c] {
+			have[c] = true
+			out = append(out, detNet{c, label, src})
+		}
+	}
+	for _, n := range dockerNetworks(ctx) {
+		for _, s := range n.Subnets {
+			add(s, "Rede Docker «"+n.Name+"» (outra rede do host)", "docker")
+		}
+		for _, g := range n.Gateways {
+			add(g, "IP do host na rede Docker «"+n.Name+"»", "host")
+		}
+	}
+	name := r.Host
+	if hh, _, err := net.SplitHostPort(name); err == nil {
+		name = hh
+	}
+	name = strings.Trim(name, "[]")
+	if _, err := netip.ParseAddr(name); err != nil && name != "" && !strings.EqualFold(name, "localhost") {
+		lc, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		if ips, err := net.DefaultResolver.LookupHost(lc, name); err == nil {
+			for i, s := range ips {
+				if i >= 6 {
+					break
+				}
+				if ip, err := netip.ParseAddr(s); err == nil && addrOK(ip.Unmap()) && !ip.IsLoopback() {
+					add(ip.Unmap().String(), "IP de "+name+" (DNS; confira se é desta máquina)", "dns")
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (a *App) mergedRelayNetsText() string {
+	var lines []string
+	seen := map[string]bool{}
+	add := func(s string) {
+		if s = strings.TrimSpace(s); s != "" && !seen[s] {
+			seen[s] = true
+			lines = append(lines, s)
+		}
+	}
+	for _, l := range strings.Split(a.sStr("relay_nets"), "\n") {
+		add(l)
+	}
+	for _, d := range a.detectedNets() {
+		add(d.CIDR)
+	}
+	return strings.Join(lines, "\n")
 }

@@ -45,7 +45,7 @@ export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (
           {f.options?.map((o) => <option key={o} value={o}>{optionLabels[o] ?? o}</option>)}
         </select>
       ) : f.type === 'textarea' ? (
-        <textarea value={String(v ?? '')} onChange={(e) => set(e.target.value)} />
+        <textarea rows={Math.min(14, Math.max(5, String(v ?? '').split('\n').length + 1))} value={String(v ?? '')} onChange={(e) => set(e.target.value)} />
       ) : (
         <input
           type={f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text'}

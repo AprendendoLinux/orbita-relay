@@ -42,3 +42,16 @@ export function randomPassword(len = 16): string {
   }
   return out.join('')
 }
+
+export function mergeLines(current: string, add: string[]): string {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const l of [...current.split('\n'), ...add]) {
+    const t = l.trim()
+    if (t && !seen.has(t)) {
+      seen.add(t)
+      out.push(t)
+    }
+  }
+  return out.join('\n')
+}
