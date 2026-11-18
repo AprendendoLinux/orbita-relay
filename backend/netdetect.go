@@ -202,7 +202,7 @@ func dockerNetworks(ctx context.Context) []dockerNet {
 }
 
 func (a *App) suggestedNets(ctx context.Context, r *http.Request, have map[string]bool) []detNet {
-	var out []detNet
+	out := []detNet{}
 	add := func(c, label, src string) {
 		if c != "" && !have[c] {
 			have[c] = true

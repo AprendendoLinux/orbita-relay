@@ -31,7 +31,7 @@ export default function NetDetect({ auto, version, current, onAdd, autoAdd = fal
   useEffect(() => {
     if (!autoAdd || did.current || !d) return
     did.current = true
-    const all = [...d.items, ...d.suggestions].map((i) => i.cidr).filter((c) => !inField.has(c))
+    const all = [...(d.items ?? []), ...(d.suggestions ?? [])].map((i) => i.cidr).filter((c) => !inField.has(c))
     if (all.length) {
       onAdd(all)
       setAdded(`${all.length} rede(s) encontrada(s) já adicionada(s) à lista. Remova as que não quiser`)

@@ -27,6 +27,17 @@ export function setSystemDefault(d: string | undefined) {
   if (!read(KEY)) applyMode(d)
 }
 
+export function currentMode(): Mode {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+}
+
+export function toggleMode(): Mode {
+  const next: Mode = currentMode() === 'dark' ? 'light' : 'dark'
+  try { localStorage.setItem(KEY, next) } catch { /* ignora */ }
+  applyMode(next)
+  return next
+}
+
 export function clearPersonalMode() {
   try { localStorage.removeItem(KEY) } catch { /* ignora */ }
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-var reNodeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 ._-]{1,59}$`)
+var reNodeName = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N} ._-]{1,59}$`)
 
 type Node struct {
 	ID        int64      `json:"id"`
