@@ -174,6 +174,7 @@ Códigos de verificação, recuperação de senha e avisos usam um modelo HTML c
 | **[Mensagens e relatórios](docs/relatorios.md)** | Painel, filtros, PDF, CSV e ocultar falhas. |
 | **[Mailcow](docs/mailcow.md)** | Registrar as mensagens de servidores Mailcow. |
 | **[Vários servidores](docs/multi-servidor.md)** | Servidor central e clientes. |
+| **[Relay CLI](docs/relay-cli.md)** | Relay leve, sem painel e sem banco, configurado só pelo `docker-compose.yml`. |
 | **[Docker, rede e IPv6](docs/docker-rede-ipv6.md)** | Por que usar o IP da máquina, redes autorizadas e IPv6 no Docker. |
 | **[Solução de problemas](docs/solucao-de-problemas.md)** | Logs do Exim, DKIM, DNS, Gmail e permissões. |
 

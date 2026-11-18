@@ -3,7 +3,7 @@ import { api, fmtDate } from '../api'
 import { useDialog } from '../components/Dialog'
 import { useBranding } from '../branding'
 
-type Node = { id: number; name: string; disabled: boolean; created_at: string; last_seen: string | null; last_ip: string; version: string; messages: number }
+type Node = { id: number; name: string; disabled: boolean; created_at: string; last_seen: string | null; last_ip: string; version: string; kind: string; ver: string; outdated: boolean; messages: number }
 
 export default function Nodes() {
   const { branding } = useBranding()
@@ -86,11 +86,12 @@ export default function Nodes() {
       <div className="glass card">
         <div className="tablewrap">
           <table>
-            <thead><tr><th>Servidor</th><th>Status</th><th>Último contato</th><th>IP</th><th>Mensagens</th><th></th></tr></thead>
+            <thead><tr><th>Servidor</th><th>Tipo</th><th>Status</th><th>Último contato</th><th>IP</th><th>Mensagens</th><th></th></tr></thead>
             <tbody>
               {list.map((n) => (
                 <tr key={n.id}>
-                  <td className="wrap"><b>{n.name}</b><div className="muted small mono">{n.version}</div></td>
+                  <td className="wrap"><b>{n.name}</b></td>
+                  <td>{n.kind ? <><span className="badge b-info">{n.kind === 'cli' ? 'CLI' : 'App completo'}</span><div className="muted small mono">v{n.ver}{n.outdated && <span title="Versão anterior à do servidor central" style={{ color: 'var(--warn, #f5a524)' }}> ⚠ desatualizado</span>}</div></> : <span className="muted">—</span>}</td>
                   <td><span className={`badge ${n.disabled ? 'b-bad' : n.last_seen ? 'b-ok' : 'b-warn'}`}>{n.disabled ? 'desativado' : n.last_seen ? 'ativo' : 'aguardando'}</span></td>
                   <td className="mono" style={{ whiteSpace: 'nowrap' }}>{n.last_seen ? fmtDate(n.last_seen, branding?.timezone) : '—'}</td>
                   <td className="mono">{n.last_ip || '—'}</td>

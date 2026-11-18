@@ -3,12 +3,12 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"orbitarelay/internal/netdet"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,58 +18,9 @@ import (
 
 const gatewayMarker = "Docker gateway"
 
-func readDefaultGateways() []string {
-	var out []string
-	if f, err := os.Open("/proc/net/route"); err == nil {
-		sc := bufio.NewScanner(f)
-		sc.Scan()
-		for sc.Scan() {
-			c := strings.Fields(sc.Text())
-			if len(c) < 3 || c[1] != "00000000" || c[2] == "00000000" {
-				continue
-			}
-			if b, err := hex.DecodeString(c[2]); err == nil && len(b) == 4 {
-				out = append(out, net.IPv4(b[3], b[2], b[1], b[0]).String())
-			}
-		}
-		f.Close()
-	}
-	if f, err := os.Open("/proc/net/ipv6_route"); err == nil {
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			c := strings.Fields(sc.Text())
-			if len(c) < 6 || c[0] != strings.Repeat("0", 32) || c[1] != "00" || c[4] == strings.Repeat("0", 32) {
-				continue
-			}
-			if b, err := hex.DecodeString(c[4]); err == nil && len(b) == 16 {
-				out = append(out, net.IP(b).String())
-			}
-		}
-		f.Close()
-	}
-	return out
-}
+func readDefaultGateways() []string { return netdet.ReadDefaultGateways() }
 
-func dockerGateways() []string {
-	if v := os.Getenv("ORBITA_DOCKER_GATEWAYS"); v != "" {
-		var out []string
-		for _, p := range strings.Split(v, ",") {
-			if ip := net.ParseIP(strings.TrimSpace(p)); ip != nil {
-				out = append(out, ip.String())
-			}
-		}
-		return out
-	}
-	seen := map[string]bool{}
-	var out []string
-	for _, g := range readDefaultGateways() {
-		if !seen[g] && !strings.HasPrefix(g, "fe80:") {
-			seen[g] = true
-			out = append(out, g)
-		}
-	}
-	return out
-}
+func dockerGateways() []string { return netdet.DockerGateways() }
 
 type dockerStatus struct {
 	Available    bool   `json:"available"`

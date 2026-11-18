@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,7 +18,40 @@ type Node struct {
 	LastSeen  *time.Time `json:"last_seen"`
 	LastIP    string     `json:"last_ip"`
 	Version   string     `json:"version"`
+	Kind      string     `json:"kind"`
+	Ver       string     `json:"ver"`
+	Outdated  bool       `json:"outdated"`
 	Messages  int64      `json:"messages"`
+}
+
+func parseClientUA(ua string) (kind, ver string) {
+	name, v, _ := strings.Cut(ua, "/")
+	switch name {
+	case "OrbitaRelay-CLI":
+		return "cli", v
+	case "OrbitaRelay":
+		return "app", v
+	}
+	return "", ""
+}
+
+func verParts(v string) [3]int {
+	var out [3]int
+	core, _, _ := strings.Cut(v, "-")
+	for i, p := range strings.SplitN(core, ".", 3) {
+		out[i], _ = strconv.Atoi(p)
+	}
+	return out
+}
+
+func verLess(a, b string) bool {
+	x, y := verParts(a), verParts(b)
+	for i := range x {
+		if x[i] != y[i] {
+			return x[i] < y[i]
+		}
+	}
+	return false
 }
 
 func (a *App) handleListNodes(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +66,8 @@ func (a *App) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var n Node
 		if rows.Scan(&n.ID, &n.Name, &n.Disabled, &n.CreatedAt, &n.LastSeen, &n.LastIP, &n.Version, &n.Messages) == nil {
+			n.Kind, n.Ver = parseClientUA(n.Version)
+			n.Outdated = n.Ver != "" && verLess(n.Ver, version)
 			out = append(out, n)
 		}
 	}

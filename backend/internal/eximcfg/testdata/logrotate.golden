@@ -1,0 +1,11 @@
+/var/log/exim/*.log {
+  daily
+  maxsize 50M
+  rotate 7
+  compress
+  delaycompress
+  missingok
+  notifempty
+  nomail
+  create 0644 Debian-exim adm
+}

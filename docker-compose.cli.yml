@@ -1,0 +1,35 @@
+name: orbitarelay-cli
+
+services:
+  orbitarelay-cli:
+    image: ghcr.io/aprendendolinux/orbita-relay-cli:1.6.0
+    container_name: orbitarelay-cli
+    hostname: relay-filial
+    restart: unless-stopped
+    ports:
+      - "25:25"
+      - "587:587"
+    environment:
+      TZ: America/Sao_Paulo
+      ORBITA_MODE: relay
+      ORBITA_HOSTNAME: relay.exemplo.com.br
+      ORBITA_DOMAINS: exemplo.com.br
+      ORBITA_DKIM_SELECTOR: dkim
+      ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
+      ORBITA_PUBLIC_IPS: 203.0.113.10
+      # Smarthost (troque ORBITA_MODE para smarthost):
+      # ORBITA_SMARTHOST_HOST: smtp-relay.gmail.com
+      # ORBITA_SMARTHOST_PORT: 587
+      # ORBITA_SMARTHOST_TLS: starttls
+      # ORBITA_SMARTHOST_USER: usuario@exemplo.com.br
+      # ORBITA_SMARTHOST_PASS: senha
+      # Servidor central (opcional):
+      # ORBITA_CENTRAL_URL: https://orbita.exemplo.com.br
+      # ORBITA_CENTRAL_TOKEN: orb_...
+    volumes:
+      - cli-data:/data
+      - cli-spool:/var/spool/exim4
+
+volumes:
+  cli-data:
+  cli-spool:

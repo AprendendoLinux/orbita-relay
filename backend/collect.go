@@ -1,20 +1,17 @@
 package main
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
+	"orbitarelay/internal/eximlog"
+	"orbitarelay/internal/push"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,21 +21,6 @@ const (
 	maxCollectEvents = 5000
 	maxCollectBody   = 8 << 20
 )
-
-type wireEvent struct {
-	At      time.Time `json:"at"`
-	ID      string    `json:"id"`
-	Kind    string    `json:"k"`
-	Sender  string    `json:"sender,omitempty"`
-	Host    string    `json:"host,omitempty"`
-	IP      string    `json:"ip,omitempty"`
-	Subject string    `json:"subject,omitempty"`
-	Size    int       `json:"size,omitempty"`
-	Rcpt    string    `json:"rcpt,omitempty"`
-	RHost   string    `json:"rhost,omitempty"`
-	RIP     string    `json:"rip,omitempty"`
-	Detail  string    `json:"detail,omitempty"`
-}
 
 type pushStatus struct {
 	mu      sync.Mutex
@@ -69,103 +51,36 @@ func (p *pushStatus) idleFor() time.Duration {
 	return time.Since(p.lastOK)
 }
 
-func (a *App) collectURL(path string) (string, error) {
-	host := a.sStr("collect_host")
-	port := a.sInt("collect_port")
+func (a *App) centralClient() (*push.Client, error) {
+	host, port := a.sStr("collect_host"), a.sInt("collect_port")
 	if host == "" || port == 0 {
-		return "", errors.New("servidor central não configurado")
+		return nil, errors.New("servidor central não configurado")
 	}
-	scheme := "https"
-	if a.sStr("collect_scheme") == "http" {
-		scheme = "http"
-	}
-	return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(port)) + a.sStr("collect_path") + path, nil
-}
-
-func (a *App) collectDo(ctx context.Context, method, path string, body []byte, gz bool) (*http.Response, func(), error) {
-	u, err := a.collectURL(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	token := a.sStr("collect_token")
-	if token == "" {
-		return nil, nil, errors.New("token do servidor não informado")
-	}
-	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: a.sBool("collect_skip_verify"), MinVersion: tls.VersionTLS12},
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-	}
-	cl := &http.Client{
-		Transport:     tr,
-		Timeout:       45 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
-	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
-	if err != nil {
-		return nil, nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("User-Agent", "OrbitaRelay/"+version)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-		if gz {
-			req.Header.Set("Content-Encoding", "gzip")
-		}
-	}
-	resp, err := cl.Do(req)
-	if err != nil {
-		tr.CloseIdleConnections()
-		return nil, nil, err
-	}
-	return resp, tr.CloseIdleConnections, nil
-}
-
-func respError(resp *http.Response) error {
-	switch {
-	case resp.StatusCode >= 300 && resp.StatusCode < 400:
-		return fmt.Errorf("o servidor respondeu com redirecionamento (%d); ajuste protocolo, porta e caminho para a URL final", resp.StatusCode)
-	case resp.StatusCode == 401 || resp.StatusCode == 403:
-		return errors.New("token recusado pelo servidor central")
-	case resp.StatusCode == 404:
-		return errors.New("endpoint não encontrado (o destino está em modo Servidor? o caminho está correto?)")
-	case resp.StatusCode == 429:
-		return errors.New("servidor central limitou as requisições (muitas tentativas)")
-	}
-	return fmt.Errorf("resposta inesperada do servidor central: HTTP %d", resp.StatusCode)
+	return &push.Client{Scheme: a.sStr("collect_scheme"), Host: host, Port: port, BasePath: a.sStr("collect_path"),
+		Token: a.sStr("collect_token"), SkipVerify: a.sBool("collect_skip_verify"), UserAgent: "OrbitaRelay/" + version}, nil
 }
 
 func (a *App) pushBatch(ctx context.Context, evs []logEvent) error {
 	if len(evs) == 0 {
 		return nil
 	}
-	wire := make([]wireEvent, len(evs))
-	for i, e := range evs {
-		wire[i] = wireEvent{At: e.at, ID: e.eximID, Kind: e.kind, Sender: e.sender, Host: e.host, IP: e.ip,
-			Subject: e.subject, Size: e.size, Rcpt: e.rcpt, RHost: e.rhost, RIP: e.rip, Detail: e.detail}
-	}
-	raw, err := json.Marshal(map[string]any{"events": wire})
+	c, err := a.centralClient()
 	if err != nil {
 		return err
 	}
-	var buf bytes.Buffer
-	zw := gzip.NewWriter(&buf)
-	_, _ = zw.Write(raw)
-	_ = zw.Close()
-	resp, done, err := a.collectDo(ctx, http.MethodPost, "/api/collect", buf.Bytes(), true)
-	if err != nil {
+	if err := c.Send(ctx, evs); err != nil {
 		return err
-	}
-	defer done()
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-	if resp.StatusCode != 200 {
-		return respError(resp)
 	}
 	a.push.ok(len(evs))
 	return nil
+}
+
+func (a *App) pingCentral(ctx context.Context) (push.Info, error) {
+	c, err := a.centralClient()
+	if err != nil {
+		return push.Info{}, err
+	}
+	return c.Ping(ctx)
 }
 
 func (a *App) runPush(ctx context.Context) {
@@ -198,28 +113,6 @@ func (a *App) runPush(ctx context.Context) {
 	}
 }
 
-type pingInfo struct {
-	Node    string `json:"node"`
-	Version string `json:"version"`
-}
-
-func (a *App) pingCentral(ctx context.Context) (pingInfo, error) {
-	var out pingInfo
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	resp, done, err := a.collectDo(ctx, http.MethodGet, "/api/collect/ping", nil, false)
-	if err != nil {
-		return out, fmt.Errorf("falha na conexão: %w", err)
-	}
-	defer done()
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return out, respError(resp)
-	}
-	_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&out)
-	return out, nil
-}
-
 func (a *App) handleCollectTest(w http.ResponseWriter, r *http.Request) {
 	out, err := a.pingCentral(r.Context())
 	if err != nil {
@@ -239,7 +132,7 @@ func (a *App) handleCollectStatus(w http.ResponseWriter, r *http.Request) {
 	pending := int64(0)
 	if fi, err := os.Stat(filepath.Join(a.logDir, "main.log")); err == nil {
 		var ino, pos int64
-		if a.row(r.Context(), `SELECT inode,pos FROM ingest_state WHERE file='push'`).Scan(&ino, &pos) != nil || ino == inodeOf(fi) {
+		if a.row(r.Context(), `SELECT inode,pos FROM ingest_state WHERE file='push'`).Scan(&ino, &pos) != nil || ino == eximlog.InodeOf(fi) {
 			pending = max(fi.Size()-pos, 0)
 		} else {
 			pending = fi.Size()
@@ -305,7 +198,7 @@ func (a *App) handleCollect(w http.ResponseWriter, r *http.Request) {
 		rd = io.LimitReader(gz, 4*maxCollectBody)
 	}
 	var in struct {
-		Events []wireEvent `json:"events"`
+		Events []push.WireEvent `json:"events"`
 	}
 	if err := json.NewDecoder(rd).Decode(&in); err != nil {
 		writeErr(w, 400, "corpo inválido")
@@ -318,20 +211,20 @@ func (a *App) handleCollect(w http.ResponseWriter, r *http.Request) {
 	evs := make([]logEvent, 0, len(in.Events))
 	limit := time.Now().Add(48 * time.Hour)
 	for _, e := range in.Events {
-		if !reEximID.MatchString(e.ID) || e.At.IsZero() || e.At.After(limit) || e.At.Year() < 2000 {
+		if !eximlog.ReID.MatchString(e.ID) || e.At.IsZero() || e.At.After(limit) || e.At.Year() < 2000 {
 			continue
 		}
-		ev := logEvent{at: e.At.UTC(), eximID: e.ID, kind: e.Kind, size: max(e.Size, 0)}
+		ev := logEvent{At: e.At.UTC(), ID: e.ID, Kind: e.Kind, Size: max(e.Size, 0)}
 		switch e.Kind {
 		case "<=":
-			ev.sender, ev.host, ev.ip = strings.ToLower(e.Sender), e.Host, e.IP
-			ev.subject = trunc(clean(e.Subject), 500)
+			ev.Sender, ev.Host, ev.IP = strings.ToLower(e.Sender), e.Host, e.IP
+			ev.Subject = trunc(clean(e.Subject), 500)
 		case "=>", "->", "**", "==":
 			if e.Rcpt == "" {
 				continue
 			}
-			ev.rcpt, ev.rhost, ev.rip = strings.ToLower(e.Rcpt), e.RHost, e.RIP
-			ev.detail = trunc(clean(e.Detail), 1000)
+			ev.Rcpt, ev.RHost, ev.RIP = strings.ToLower(e.Rcpt), e.RHost, e.RIP
+			ev.Detail = trunc(clean(e.Detail), 1000)
 		case "Completed":
 		default:
 			continue
