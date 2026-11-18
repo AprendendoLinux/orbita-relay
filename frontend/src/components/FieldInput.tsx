@@ -48,7 +48,7 @@ export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (
     )
   return (
     <label className="f" style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-      {f.label}{f.required && <span style={{ color: 'var(--danger)' }}> *</span>}
+      <span>{f.label}{f.required && <b style={{ color: 'var(--danger)' }}> *</b>}</span>
       {f.type === 'select' ? (
         <select value={String(v)} onChange={(e) => set(e.target.value)}>
           {f.options?.map((o) => <option key={o} value={o}>{optionLabels[`${f.key}:${o}`] ?? optionLabels[o] ?? o}</option>)}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api'
 import { useDialog } from '../components/Dialog'
+import { copyText } from '../lib'
 
 type Domain = {
   id: number; domain: string; dkim_enabled: boolean; dkim_record?: string; dkim_host?: string
@@ -9,21 +10,17 @@ type Domain = {
 type Check = { ok: boolean; found: string[] | null; detail: string }
 type Checks = { spf: Check; dmarc: Check; dkim: Check }
 
-async function copyText(t: string) {
-  try {
-    await navigator.clipboard.writeText(t)
-  } catch {
-    const ta = document.createElement('textarea')
-    ta.value = t
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    ta.remove()
-  }
+function CopyBtn({ text, label, copiedLabel = 'Copiado ✓' }: { text: string; label: string; copiedLabel?: string }) {
+  const [ok, setOk] = useState(false)
+  return (
+    <button type="button" className="sm" onClick={async () => { setOk(await copyText(text)); setTimeout(() => setOk(false), 1500) }}>{ok ? copiedLabel : label}</button>
+  )
 }
 
-function Record({ title, host, value, check, note, stale }: { title: string; host: string; value?: string; check?: Check; note?: string; stale?: boolean }) {
-  const [copied, setCopied] = useState(false)
+const shortName = (host: string, domain: string) => (host === domain ? '@' : host.endsWith('.' + domain) ? host.slice(0, -(domain.length + 1)) : host)
+
+function Record({ title, host, domain, value, check, note, stale }: { title: string; host: string; domain: string; value?: string; check?: Check; note?: string; stale?: boolean }) {
+  const short = shortName(host, domain)
   return (
     <div className="rec">
       <div className="row spread">
@@ -32,13 +29,27 @@ function Record({ title, host, value, check, note, stale }: { title: string; hos
       </div>
       {value ? (
         <>
-          <div className="small muted">TXT em <span className="mono">{host}</span></div>
-          {stale && <span className="help" style={{ color: 'var(--warning)' }}>O seletor foi alterado e ainda não foi salvo: clique em Salvar acima para aplicá-lo ao relay.</span>}
-          <code className="block">{value}</code>
-          <div className="row">
-            <button className="sm" onClick={async () => { await copyText(value); setCopied(true); setTimeout(() => setCopied(false), 1500) }}>{copied ? 'Copiado ✓' : 'Copiar valor'}</button>
-            {note && <span className="help">{note}</span>}
+          <div className="dns-row">
+            <span className="muted small">Tipo</span>
+            <span className="mono">TXT</span>
+            <span />
           </div>
+          <div className="dns-row">
+            <span className="muted small">Nome</span>
+            <span className="mono" style={{ wordBreak: 'break-all' }}>{host}</span>
+            <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+              <CopyBtn text={host} label="Copiar nome" />
+              {short !== host && <CopyBtn text={short} label={`Copiar “${short}”`} />}
+            </span>
+          </div>
+          {stale && <span className="help" style={{ color: 'var(--warning)' }}>O seletor foi alterado e ainda não foi salvo: clique em Salvar acima para aplicá-lo ao relay.</span>}
+          <div className="dns-row" style={{ alignItems: 'start' }}>
+            <span className="muted small">Valor</span>
+            <code className="block" style={{ margin: 0 }}>{value}</code>
+            <CopyBtn text={value} label="Copiar valor" />
+          </div>
+          <span className="help">Alguns provedores de DNS pedem o nome relativo ao domínio ({short === host ? 'o nome completo' : <span className="mono">{short}</span>}) e outros o nome completo: use o botão correspondente.</span>
+          {note && <span className="help">{note}</span>}
         </>
       ) : <span className="muted small">Gere a chave DKIM para obter o registro.</span>}
       {check && !check.ok && check.detail && <span className="help">{check.detail}</span>}
@@ -113,9 +124,9 @@ export default function Domains({ embedded = false, selector, version = 0 }: { e
                 </div>
               </div>
               <div className="grid cols-2">
-                <Record title="SPF" host={d.domain} value={d.spf_record} check={c?.spf} note={`${d.spf_note ? d.spf_note + ' ' : ''}Se já existir um SPF, mescle os mecanismos em um único registro.`} />
-                <Record title="DKIM" host={dkimHost(d)} stale={selector !== undefined && selector !== '' && !!d.dkim_host && !d.dkim_host.startsWith(selector + '.')} value={d.dkim_record} check={c?.dkim} />
-                <Record title="DMARC" host={d.dmarc_host} value={d.dmarc_record} check={c?.dmarc} note="Comece com p=none e endureça após monitorar os relatórios." />
+                <Record title="SPF" domain={d.domain} host={d.domain} value={d.spf_record} check={c?.spf} note={`${d.spf_note ? d.spf_note + ' ' : ''}Se já existir um SPF, mescle os mecanismos em um único registro.`} />
+                <Record title="DKIM" domain={d.domain} host={dkimHost(d)} stale={selector !== undefined && selector !== '' && !!d.dkim_host && !d.dkim_host.startsWith(selector + '.')} value={d.dkim_record} check={c?.dkim} />
+                <Record title="DMARC" domain={d.domain} host={d.dmarc_host} value={d.dmarc_record} check={c?.dmarc} note="Comece com p=none e endureça após monitorar os relatórios." />
               </div>
             </div>
           )
