@@ -154,6 +154,8 @@ O **hostname do relay (HELO)** é obrigatório e já vem preenchido com o endere
 
 As abas seguem o modo escolhido na hora, mesmo antes de salvar, e os valores das abas ocultas não são apagados.
 
+O envio de e-mails do sistema e o teste do smarthost se apresentam ao servidor SMTP (EHLO) com o **hostname do relay**. Isso é exigido por servidores como o `smtp-relay.gmail.com`, que fecha a conexão com `EHLO localhost`. O `smtp-relay.gmail.com` também exige que o IP do servidor (ou o usuário) esteja autorizado no Google Workspace.
+
 ## Servidores Mailcow
 
 O OrbitaRelay pode registrar as mensagens recebidas e enviadas por servidores [Mailcow](https://mailcow.email), lendo a API deles. Funciona em qualquer modo de implantação e nada é instalado nem alterado no Mailcow.

@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/smtp"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -168,14 +169,14 @@ func (a *App) mfaVerify(ctx context.Context, u mfaUser, code string) bool {
 func (a *App) smtpReady() bool { return a.sStr("smtp_host") != "" && a.sStr("smtp_from") != "" }
 
 type smtpCfg struct {
-	Host, TLS, User, Pass, From string
-	Port                        int
-	Skip                        bool
+	Host, TLS, User, Pass, From, Helo string
+	Port                              int
+	Skip                              bool
 }
 
 func (a *App) smtpSaved() smtpCfg {
 	return smtpCfg{Host: a.sStr("smtp_host"), Port: a.sInt("smtp_port"), TLS: a.sStr("smtp_tls"), User: a.sStr("smtp_user"),
-		Pass: a.sStr("smtp_pass"), From: a.sStr("smtp_from"), Skip: a.sBool("smtp_skip_verify")}
+		Pass: a.sStr("smtp_pass"), From: a.sStr("smtp_from"), Helo: a.sStr("mta_hostname"), Skip: a.sBool("smtp_skip_verify")}
 }
 
 func (a *App) smtpDeliver(ctx context.Context, cfg smtpCfg, to string, raw []byte) error {
@@ -207,6 +208,17 @@ func (a *App) smtpDeliver(ctx context.Context, cfg smtpCfg, to string, raw []byt
 		return err
 	}
 	defer c.Close()
+	helo := cfg.Helo
+	if helo == "" {
+		if h, err := os.Hostname(); err == nil && strings.Contains(h, ".") {
+			helo = h
+		}
+	}
+	if helo != "" && reHost.MatchString(helo) {
+		if err := c.Hello(helo); err != nil {
+			return fmt.Errorf("o servidor recusou o EHLO %s: %w", helo, err)
+		}
+	}
 	if mode == "starttls" {
 		if err := c.StartTLS(tlsCfg); err != nil {
 			return fmt.Errorf("STARTTLS falhou: %w", err)
@@ -787,7 +799,7 @@ func (a *App) handleTestSmarthost(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "informe um e-mail de destino válido")
 		return
 	}
-	cfg := smtpCfg{Host: a.sStr("smarthost_host"), Port: a.sInt("smarthost_port"), TLS: a.sStr("smarthost_tls"), User: a.sStr("smarthost_user"), Pass: a.sStr("smarthost_pass")}
+	cfg := smtpCfg{Host: a.sStr("smarthost_host"), Port: a.sInt("smarthost_port"), TLS: a.sStr("smarthost_tls"), User: a.sStr("smarthost_user"), Pass: a.sStr("smarthost_pass"), Helo: a.sStr("mta_hostname")}
 	if in.Host != nil {
 		cfg.Host = strings.TrimSpace(*in.Host)
 	}
