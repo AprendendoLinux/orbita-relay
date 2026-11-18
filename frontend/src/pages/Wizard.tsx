@@ -14,7 +14,7 @@ import { mergeLines } from '../lib'
 
 const stepLabels: Record<string, string> = {
   nome: 'Nome', fuso: 'Fuso horário', impl: 'Implantação', central: 'Servidor central',
-  modo: 'Modo', auth: 'Autenticação', logs: 'Logs', resumo: 'Resumo',
+  modo: 'Modo', redes: 'Redes', auth: 'Autenticação', logs: 'Logs', resumo: 'Resumo',
 }
 const fallbackZones = ['America/Sao_Paulo', 'America/Manaus', 'America/Fortaleza', 'America/Bahia', 'America/Cuiaba', 'America/Rio_Branco', 'America/Noronha', 'UTC']
 
@@ -35,7 +35,7 @@ export default function Wizard({ first }: { first: boolean }) {
   const tzList = useMemo(zones, [])
   const deploy = String(vals.deploy_mode ?? 'standalone')
   const steps = useMemo(
-    () => ['nome', 'fuso', 'impl', ...(deploy === 'client' ? ['central'] : []), 'modo', 'auth', 'logs', 'resumo'],
+    () => ['nome', 'fuso', 'impl', ...(deploy === 'client' ? ['central'] : []), 'modo', 'redes', 'auth', 'logs', 'resumo'],
     [deploy],
   )
   const cur = steps[step]
@@ -80,6 +80,7 @@ export default function Wizard({ first }: { first: boolean }) {
     ...(deploy === 'client' ? [['Servidor central', `${vals.collect_scheme}://${vals.collect_host || '—'}:${vals.collect_port}${vals.collect_path ?? ''}`] as [string, string]] : []),
     ['Modo', mode === 'relay' ? 'Relay SMTP (entrega direta)' : `Smarthost (${vals.smarthost_host || '—'}:${vals.smarthost_port})`],
     ['Hostname do relay', String(vals.mta_hostname || '(do container)')],
+    ['Redes autorizadas', `${String(vals.relay_nets ?? '').split('\n').filter((l) => l.trim()).length} na lista${vals.relay_nets_auto === true ? ' + detecção automática' : ''}`],
     ['Autenticação do painel', auth === 'ldap' ? `LDAP/AD (${vals.ldap_host || '—'})` : 'Local'],
     ['Retenção no banco', `${vals.db_retention_days} dias`],
     ['Rotação do log Exim', `${vals.log_rotate_mb} MB, ${vals.log_keep_files} arquivos`],
@@ -175,7 +176,7 @@ export default function Wizard({ first }: { first: boolean }) {
             {cur === 'modo' && (
               <>
                 <Tip title="Como o relay entrega as mensagens?">
-                  <b>Relay SMTP</b> entrega direto ao destino: exige IP público com DNS reverso e registros SPF, DKIM e DMARC nos seus domínios. <b>Smarthost</b> encaminha por um provedor (Office 365, Gmail, SES…), que cuida da reputação de entrega. Em <b>Redes autorizadas</b>, liste os IPs/redes que podem enviar por este relay.
+                  <b>Relay SMTP</b> entrega direto ao destino: exige IP público com DNS reverso e registros SPF, DKIM e DMARC nos seus domínios. <b>Smarthost</b> encaminha por um provedor (Office 365, Gmail, SES…), que cuida da reputação de entrega. Quem pode enviar por este relay é definido no próximo passo, <b>Redes</b>.
                 </Tip>
                 <div className="choice">
                   <button type="button" className={mode === 'relay' ? 'on' : ''} onClick={() => set('relay_mode', 'relay')}>
@@ -186,10 +187,20 @@ export default function Wizard({ first }: { first: boolean }) {
                   </button>
                 </div>
                 <div className="form-grid">
-                  {F('mta_hostname')}{F('ip_mode')}{F('max_message_mb')}
-                  {F('relay_nets')}
+                  {F('mta_hostname')}{F('max_message_mb')}
                   {mode === 'relay' && <>{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}</>}
                   {mode === 'smarthost' && <>{F('smarthost_host')}{F('smarthost_port')}{F('smarthost_tls')}{F('smarthost_user')}{F('smarthost_pass')}</>}
+                </div>
+              </>
+            )}
+
+            {cur === 'redes' && (
+              <>
+                <Tip title="Quem pode enviar e-mails por este relay?">
+                  Liste os IPs e redes autorizados. O sistema já detecta a rede Docker em que está e a inclui automaticamente; você só precisa adicionar as demais redes (a LAN da empresa, outros servidores) e os IPs da própria máquina.
+                </Tip>
+                <div className="form-grid">
+                  {F('relay_nets')}{F('relay_nets_auto')}{F('ip_mode')}
                 </div>
                 <NetDetect current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={0} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />
                 <HostSendTip />

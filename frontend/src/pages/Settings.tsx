@@ -83,7 +83,7 @@ export default function Settings() {
 
   if (!data) return <p className="muted">Carregando…</p>
   const groups = data.groups.filter((g) => data.fields.some((f) => f.group === g.id && visible(f, vals)))
-  const current = groups.some((g) => g.id === tab) ? tab : groups[0]?.id
+  const current = groups.some((g) => g.id === tab) ? tab : (['smarthost', 'entrega'].includes(tab) ? 'mta' : groups[0]?.id)
   const fields = data.fields.filter((f) => f.group === current && visible(f, vals))
   const saved = (k: string) => data.fields.find((f) => f.key === k)
   const smtpConfigured = !!saved('smtp_host')?.value && !!saved('smtp_from')?.value
@@ -131,9 +131,16 @@ export default function Settings() {
         {current === 'geral' && vals.deploy_mode === 'client' && (
           <Tip title="Cliente">Os dados do servidor central ficam na aba “Envio para o servidor central”.</Tip>
         )}
-        {current === 'mta' && <NetDetect current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={saves} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />}
-        {current === 'mta' && <HostSendTip />}
-        {current === 'mta' && vals.ip_mode === 'dual' && <Ipv6Panel />}
+        {current === 'redes' && <NetDetect current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={saves} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />}
+        {current === 'redes' && <HostSendTip />}
+        {current === 'redes' && vals.ip_mode === 'dual' && <Ipv6Panel />}
+        {current === 'mta' && (
+          <div className="alert info small">
+            {vals.relay_mode === 'smarthost'
+              ? <>No modo <b>Smarthost</b>, configure o servidor de saída na aba <b>Smarthost</b>. Quem pode enviar por este relay fica em <b>Redes e acesso</b>.</>
+              : <>No modo <b>Relay SMTP</b>, ajuste IPs públicos, DKIM e DMARC na aba <b>Entrega e DNS</b>. Quem pode enviar por este relay fica em <b>Redes e acesso</b>.</>}
+          </div>
+        )}
         {current === 'coleta' && (
           <>
             {vals.collect_scheme === 'http' && <div className="alert warn">Com HTTP o token e os dados trafegam sem criptografia. Use apenas em redes confiáveis.</div>}

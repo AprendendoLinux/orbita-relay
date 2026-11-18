@@ -134,6 +134,19 @@ Detalhes:
 - Se o central ficar fora do ar, o cliente retoma do ponto em que parou (cursor no log), sem perdas e sem duplicar eventos.
 - Cada instalação mantém banco e painel próprios. Com HTTP o token trafega sem criptografia.
 
+## Configurações do servidor de e-mail
+
+As configurações do MTA ficam em abas separadas por finalidade (e o assistente segue a mesma divisão, com um passo próprio de **Redes**):
+
+| Aba | Conteúdo | Aparece |
+|---|---|---|
+| **Servidor de e-mail** | Modo de operação (Relay SMTP ou Smarthost), hostname (HELO), tamanho máximo, restringir remetentes | Sempre |
+| **Smarthost** | Servidor, porta, criptografia, usuário e senha | Só no modo Smarthost |
+| **Redes e acesso** | Redes autorizadas a enviar, detecção automática, modo IP e diagnóstico de IPv6 | Sempre |
+| **Entrega e DNS** | IPs públicos de saída (SPF), seletor DKIM e política DMARC | Só no modo Relay SMTP |
+
+As abas seguem o modo escolhido na hora, mesmo antes de salvar, e os valores das abas ocultas não são apagados.
+
 ## Servidores Mailcow
 
 O OrbitaRelay pode registrar as mensagens recebidas e enviadas por servidores [Mailcow](https://mailcow.email), lendo a API deles. Funciona em qualquer modo de implantação e nada é instalado nem alterado no Mailcow.

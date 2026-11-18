@@ -52,6 +52,10 @@ export default function NetDetect({ auto, version, current, onAdd }: { auto: boo
       {err && <div className="alert err">{err}</div>}
       {d && (
         <>
+          <div className="alert info small">
+            <b>Quem pode enviar agora:</b> {inField.size} {inField.size === 1 ? 'rede' : 'redes'} na lista
+            {auto && d.auto && d.items.filter((i) => !inField.has(i.cidr)).length > 0 && <> + {d.items.filter((i) => !inField.has(i.cidr)).length} detectada(s) automaticamente</>}.
+          </div>
           <span className="help">
             {auto && d.auto
               ? 'Estas redes já valem para o envio (inclusão automática ligada). Use o botão para também listá-las no campo “Redes autorizadas a enviar”, acima.'
@@ -74,9 +78,9 @@ export default function NetDetect({ auto, version, current, onAdd }: { auto: boo
           </div>
 
           {pend.length > 0 && (
-            <>
-              <div className="row spread" style={{ marginTop: 6 }}>
-                <b>Outros IPs e redes encontrados <span className="muted small">(confira antes de adicionar)</span></b>
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: 'pointer' }}><b>Outros IPs e redes encontrados ({pend.length})</b> <span className="muted small">— clique para ver e conferir antes de adicionar</span></summary>
+              <div className="row" style={{ margin: '10px 0' }}>
                 <button type="button" className="sm" onClick={() => add(pend.map((i) => i.cidr), `${pend.length} item(ns) adicionado(s) ao campo acima`)}>＋ Adicionar todos ({pend.length})</button>
               </div>
               <div className="tablewrap">
@@ -92,7 +96,7 @@ export default function NetDetect({ auto, version, current, onAdd }: { auto: boo
                   </tbody>
                 </table>
               </div>
-            </>
+            </details>
           )}
 
           <div className="stack" style={{ gap: 6 }}>
