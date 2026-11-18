@@ -26,6 +26,9 @@ export default function Settings() {
   const [editSmtp, setEditSmtp] = useState(false)
   const [testTo, setTestTo] = useState('')
   const [testing, setTesting] = useState(false)
+  const [shTo, setShTo] = useState('')
+  const [shFrom, setShFrom] = useState('')
+  const [shBusy, setShBusy] = useState(false)
 
   const load = async () => {
     const r = await api<Resp>('/api/admin/settings')
@@ -85,6 +88,23 @@ export default function Settings() {
       setMsg({ t: 'err', s: `Falha no envio: ${(e2 as Error).message}` })
     } finally {
       setTesting(false)
+    }
+  }
+
+  const testSmarthost = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setMsg(null)
+    setShBusy(true)
+    try {
+      await api('/api/admin/smarthost/test', { method: 'POST', body: {
+        to: shTo, from: shFrom, host: vals.smarthost_host, port: Number(vals.smarthost_port), tls: vals.smarthost_tls,
+        user: vals.smarthost_user, pass: typeof vals.smarthost_pass === 'string' ? vals.smarthost_pass : '',
+      } })
+      setMsg({ t: 'ok', s: `O smarthost aceitou o e-mail de teste para entrega a ${shTo}. Confira a caixa de entrada (e o spam).` })
+    } catch (e2) {
+      setMsg({ t: 'err', s: `Falha no teste do smarthost: ${(e2 as Error).message}` })
+    } finally {
+      setShBusy(false)
     }
   }
 
@@ -154,6 +174,18 @@ export default function Settings() {
             {vals.collect_scheme === 'http' && <div className="alert warn">Com HTTP o token e os dados trafegam sem criptografia. Use apenas em redes confiáveis.</div>}
             <CollectPanel vals={vals} />
           </>
+        )}
+        {current === 'smarthost' && (
+          <form className="row" onSubmit={testSmarthost} style={{ alignItems: 'flex-end' }}>
+            <label className="f" style={{ flex: '1 1 240px', maxWidth: 320 }}>Remetente do teste
+              <input type="email" value={shFrom} onChange={(e) => setShFrom(e.target.value)} placeholder={String(vals.smarthost_user || 'remetente@seudominio.com.br')} />
+            </label>
+            <label className="f" style={{ flex: '1 1 240px', maxWidth: 320 }}>Enviar teste para
+              <input type="email" value={shTo} onChange={(e) => setShTo(e.target.value)} placeholder="voce@exemplo.com.br" required />
+            </label>
+            <button disabled={shBusy || !shTo}>{shBusy ? 'Enviando…' : '✉ Enviar teste pelo smarthost'}</button>
+            <span className="help" style={{ flexBasis: '100%' }}>O teste usa os valores digitados acima, mesmo sem salvar, e envia direto ao smarthost com a criptografia e a senha informadas. Deixe o remetente em branco para usar o e-mail do sistema ou o usuário do smarthost.</span>
+          </form>
         )}
         {current === 'seguranca' && (
           <form className="row" onSubmit={testSmtp} style={{ alignItems: 'flex-end' }}>

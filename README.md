@@ -142,7 +142,7 @@ As configurações do MTA ficam em abas separadas por finalidade (e o assistente
 | Aba | Conteúdo | Aparece |
 |---|---|---|
 | **Servidor de e-mail** | Modo de operação (Relay SMTP ou Smarthost), hostname (HELO), tamanho máximo, restringir remetentes | Sempre |
-| **Smarthost** | Servidor, porta, criptografia, usuário e senha | Só no modo Smarthost |
+| **Smarthost** | Servidor, porta, criptografia, usuário e senha, com envio de e-mail de teste direto ao smarthost | Só no modo Smarthost |
 | **Redes e acesso** | Redes autorizadas a enviar, detecção automática, modo IP e diagnóstico de IPv6 | Sempre |
 | **Entrega e DNS** | IPs públicos de saída (SPF), seletor DKIM e política DMARC | Só no modo Relay SMTP |
 

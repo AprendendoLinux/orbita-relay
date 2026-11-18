@@ -57,6 +57,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("POST /api/admin/users/{id}/mfa/reset", a.auth("admin", a.handleAdminMFAReset))
 	mux.HandleFunc("POST /api/admin/networks/detect", a.auth("admin", a.handleDetectNets))
 	mux.HandleFunc("POST /api/admin/smtp/test", a.auth("admin", a.handleTestSMTP))
+	mux.HandleFunc("POST /api/admin/smarthost/test", a.auth("admin", a.handleTestSmarthost))
 	mux.HandleFunc("GET /api/me", a.auth("viewer", a.handleMe))
 	mux.HandleFunc("POST /api/me/password", a.auth("viewer", a.handleChangePassword))
 	mux.HandleFunc("GET /api/stats", a.auth("viewer", a.handleStats))

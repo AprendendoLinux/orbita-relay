@@ -768,3 +768,73 @@ func (a *App) handleAdminMFAReset(w http.ResponseWriter, r *http.Request) {
 	a.audit(r.Context(), userFrom(r).Username, "mfa.reset", name)
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
+
+func (a *App) handleTestSmarthost(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		To   string  `json:"to"`
+		From string  `json:"from"`
+		Host *string `json:"host"`
+		Port *int    `json:"port"`
+		TLS  *string `json:"tls"`
+		User *string `json:"user"`
+		Pass *string `json:"pass"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	to := strings.TrimSpace(in.To)
+	if !reEmail.MatchString(to) {
+		writeErr(w, 400, "informe um e-mail de destino válido")
+		return
+	}
+	cfg := smtpCfg{Host: a.sStr("smarthost_host"), Port: a.sInt("smarthost_port"), TLS: a.sStr("smarthost_tls"), User: a.sStr("smarthost_user"), Pass: a.sStr("smarthost_pass")}
+	if in.Host != nil {
+		cfg.Host = strings.TrimSpace(*in.Host)
+	}
+	if in.Port != nil && *in.Port > 0 && *in.Port < 65536 {
+		cfg.Port = *in.Port
+	}
+	if in.TLS != nil && (*in.TLS == "none" || *in.TLS == "starttls" || *in.TLS == "tls") {
+		cfg.TLS = *in.TLS
+	}
+	if in.User != nil {
+		cfg.User = strings.TrimSpace(*in.User)
+	}
+	if in.Pass != nil && *in.Pass != "" {
+		cfg.Pass = *in.Pass
+	}
+	from := strings.TrimSpace(in.From)
+	if from == "" {
+		from = a.sStr("smtp_from")
+	}
+	if from == "" && reEmail.MatchString(cfg.User) {
+		from = cfg.User
+	}
+	if !reEmail.MatchString(from) {
+		writeErr(w, 400, "informe o remetente do teste (um endereço que o smarthost aceite)")
+		return
+	}
+	if cfg.Host == "" {
+		writeErr(w, 400, "informe o servidor do smarthost")
+		return
+	}
+	if strings.ContainsAny(cfg.Host+cfg.User+cfg.Pass, "\r\n") {
+		writeErr(w, 400, "dados do smarthost inválidos")
+		return
+	}
+	cfg.From = from
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	name := a.sStr("app_name")
+	if err := a.sendBrandedCfg(ctx, cfg, to, "Teste do smarthost do "+name, mailMsg{
+		Preheader:  "O smarthost aceitou esta mensagem de teste",
+		Title:      "O smarthost está funcionando",
+		Paragraphs: []string{"Esta mensagem foi enviada pelo " + name + " diretamente ao smarthost " + cfg.Host + ", com a criptografia e a autenticação configuradas.", "Se você a recebeu, a conexão, a senha e o remetente estão corretos."},
+		Notice:     "Este é apenas um e-mail de teste. Nenhuma ação é necessária.",
+	}); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	a.audit(r.Context(), userFrom(r).Username, "smarthost.test", cfg.Host)
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
