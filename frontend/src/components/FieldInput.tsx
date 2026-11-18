@@ -1,7 +1,7 @@
 import ListEditor from './ListEditor'
 export type Field = {
   key: string; group: string; label: string; help?: string; type: string
-  options?: string[]; value: unknown; secret?: boolean; has_value?: boolean; depends?: string; example?: string
+  options?: string[]; required?: boolean; value: unknown; secret?: boolean; has_value?: boolean; depends?: string; example?: string
 }
 export type Vals = Record<string, unknown>
 
@@ -48,7 +48,7 @@ export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (
     )
   return (
     <label className="f" style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-      {f.label}
+      {f.label}{f.required && <span style={{ color: 'var(--danger)' }}> *</span>}
       {f.type === 'select' ? (
         <select value={String(v)} onChange={(e) => set(e.target.value)}>
           {f.options?.map((o) => <option key={o} value={o}>{optionLabels[`${f.key}:${o}`] ?? optionLabels[o] ?? o}</option>)}
@@ -61,6 +61,8 @@ export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (
           value={String(v ?? '')}
           placeholder={f.secret && f.has_value ? '•••••••• (mantida)' : ''}
           autoComplete="off"
+          required={f.required}
+          aria-invalid={f.required && String(v ?? '').trim() === ''}
           onChange={(e) => set(e.target.value)}
         />
       )}

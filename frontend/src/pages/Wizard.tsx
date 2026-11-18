@@ -56,6 +56,7 @@ export default function Wizard({ first }: { first: boolean }) {
   }
   const set = (k: string, v: unknown) => setVals({ ...vals, [k]: v })
   const auth = String(vals.auth_mode ?? 'local')
+  const blocked = cur === 'modo' && String(vals.mta_hostname ?? '').trim() === ''
 
   const [domVer, setDomVer] = useState(0)
   const saveEntrega = async () => {
@@ -220,7 +221,7 @@ export default function Wizard({ first }: { first: boolean }) {
                 <div className="form-grid">
                   {F('relay_nets')}{F('relay_nets_auto')}{F('ip_mode')}
                 </div>
-                <NetDetect current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={0} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />
+                <NetDetect autoAdd current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={0} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />
                 <HostSendTip />
                 {vals.ip_mode === 'dual' && <Ipv6Panel />}
               </>
@@ -291,7 +292,7 @@ export default function Wizard({ first }: { first: boolean }) {
                 {!first && <button onClick={() => nav('/admin/configuracoes')}>Cancelar</button>}
               </div>
               {step < steps.length - 1
-                ? <button className="primary" onClick={() => setStep(step + 1)}>Avançar →</button>
+                ? <button className="primary" disabled={blocked} title={blocked ? 'Preencha o hostname do relay' : undefined} onClick={() => setStep(step + 1)}>Avançar →</button>
                 : <button className="primary" disabled={busy} onClick={finish}>{busy ? 'Salvando…' : 'Concluir e aplicar'}</button>}
             </div>
           </div>

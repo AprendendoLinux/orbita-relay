@@ -27,6 +27,7 @@ func securityHeaders(next http.Handler) http.Handler {
 func (a *App) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/public/branding", a.handleBranding)
+	mux.HandleFunc("POST /api/setup/check", a.handleSetupCheck)
 	mux.HandleFunc("POST /api/setup/db", a.handleSetupDB)
 	mux.HandleFunc("POST /api/setup/admin", a.handleSetupAdmin)
 	mux.HandleFunc("POST /api/auth/login", a.handleLogin)

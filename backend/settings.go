@@ -15,18 +15,19 @@ import (
 )
 
 type Field struct {
-	Key     string   `json:"key"`
-	Group   string   `json:"group"`
-	Label   string   `json:"label"`
-	Help    string   `json:"help,omitempty"`
-	Type    string   `json:"type"`
-	Default any      `json:"default"`
-	Secret  bool     `json:"secret,omitempty"`
-	Options []string `json:"options,omitempty"`
-	Depends string   `json:"depends,omitempty"`
-	Example string   `json:"example,omitempty"`
-	Value   any      `json:"value"`
-	HasVal  bool     `json:"has_value,omitempty"`
+	Key      string   `json:"key"`
+	Group    string   `json:"group"`
+	Label    string   `json:"label"`
+	Help     string   `json:"help,omitempty"`
+	Type     string   `json:"type"`
+	Default  any      `json:"default"`
+	Secret   bool     `json:"secret,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	Depends  string   `json:"depends,omitempty"`
+	Example  string   `json:"example,omitempty"`
+	Value    any      `json:"value"`
+	HasVal   bool     `json:"has_value,omitempty"`
+	Required bool     `json:"required,omitempty"`
 }
 
 type Group struct {
@@ -60,7 +61,7 @@ var settingFields = []Field{
 	{Key: "collect_skip_verify", Group: "coleta", Label: "Ignorar validação do certificado (HTTPS)", Type: "bool", Default: false, Depends: "deploy_mode=client", Help: "Use apenas com certificado autoassinado"},
 	{Key: "collect_interval", Group: "coleta", Label: "Intervalo de envio (segundos)", Type: "number", Default: 10, Depends: "deploy_mode=client"},
 	{Key: "relay_mode", Group: "mta", Label: "Modo de operação", Type: "select", Default: "relay", Options: []string{"relay", "smarthost"}, Help: "relay = entrega direta (domínios, DKIM, SPF, DMARC); smarthost = encaminha por outro servidor SMTP"},
-	{Key: "mta_hostname", Group: "mta", Label: "Hostname do relay (HELO)", Type: "text", Default: "", Help: "Vazio usa o hostname do container"},
+	{Key: "mta_hostname", Group: "mta", Label: "Hostname do relay (HELO)", Type: "text", Default: "", Required: true, Help: "Nome DNS deste servidor, usado no HELO. Use o mesmo nome do DNS reverso (PTR) e do registro SPF. Preenchido com o endereço pelo qual você acessa o painel"},
 	{Key: "relay_nets", Group: "redes", Label: "Redes autorizadas a enviar", Type: "textarea", Default: "127.0.0.1\n::1\n10.0.0.0/8\n192.168.0.0/16\nfd00::/8", Help: "IPs ou redes (CIDR, IPv4/IPv6) autorizados a enviar por este relay"},
 	{Key: "relay_nets_auto", Group: "redes", Label: "Incluir automaticamente as redes detectadas", Type: "bool", Default: true, Help: "Soma à lista acima o loopback, a rede Docker em que o contêiner está e os IPs da máquina conhecidos. Veja a lista detectada abaixo"},
 	{Key: "enforce_sender_domains", Group: "mta", Label: "Restringir remetentes aos domínios cadastrados", Type: "bool", Default: true, Depends: "relay_mode=relay"},
@@ -191,6 +192,9 @@ func validateSetting(f *Field, v any) (any, error) {
 	}
 	switch f.Key {
 	case "mta_hostname", "smarthost_host", "smtp_host", "ldap_host", "collect_host":
+		if f.Key == "mta_hostname" && s == "" {
+			return nil, errors.New("informe o hostname do relay (obrigatório)")
+		}
 		if s != "" && !reHost.MatchString(s) {
 			if _, err := netip.ParseAddr(s); err != nil {
 				return nil, errors.New("hostname inválido")
@@ -376,8 +380,11 @@ func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if f.Key == "relay_nets" {
 			if _, saved := a.raw("relay_nets"); !saved {
-				f.Value = a.mergedRelayNetsText()
+				f.Value = a.mergedRelayNetsText(r)
 			}
+		}
+		if f.Key == "mta_hostname" && strings.TrimSpace(fmt.Sprint(f.Value)) == "" {
+			f.Value = hostnameFromRequest(r)
 		}
 		out = append(out, f)
 	}

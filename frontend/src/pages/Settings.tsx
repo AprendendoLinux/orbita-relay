@@ -36,6 +36,11 @@ export default function Settings() {
 
   const save = async () => {
     if (!data) return
+    const miss = data.fields.find((f) => f.required && visible(f, vals) && String(vals[f.key] ?? '').trim() === '')
+    if (miss) {
+      setMsg({ t: 'err', s: `Preencha o campo obrigatório: ${miss.label}` })
+      return
+    }
     setBusy(true)
     setMsg(null)
     const body: Vals = {}

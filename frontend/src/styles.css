@@ -216,3 +216,13 @@ button.danger:not(.sm):not(.ghost) { background: color-mix(in srgb, var(--danger
 .dmarc-help ul { margin: 6px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
 .dmarc-help li.on { color: var(--text); }
 .dmarc-help b { color: var(--text); font-weight: 600; }
+
+.setup-step { animation: stepin 0.28s ease both; }
+@keyframes stepin { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.meter { display: flex; align-items: center; gap: 6px; margin: -4px 0 2px; }
+.meter span { flex: 1; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 25%, transparent); transition: background 0.2s; }
+.meter span.on.l1 { background: var(--danger); }
+.meter span.on.l2 { background: var(--warning); }
+.meter span.on.l3 { background: var(--primary); }
+.meter span.on.l4 { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.meter em { font-style: normal; font-size: 12px; color: var(--muted); min-width: 78px; text-align: right; }

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 
 type Item = { cidr: string; label: string; source: string }
 type Resp = { auto: boolean; items: Item[]; suggestions: Item[]; effective: string[] }
 
-export default function NetDetect({ auto, version, current, onAdd }: { auto: boolean; version: number; current: string; onAdd: (list: string[]) => void }) {
+export default function NetDetect({ auto, version, current, onAdd, autoAdd = false }: { auto: boolean; version: number; current: string; onAdd: (list: string[]) => void; autoAdd?: boolean }) {
+  const did = useRef(false)
   const inField = new Set(current.split('\n').map((l) => l.trim()).filter(Boolean))
   const [d, setD] = useState<Resp | null>(null)
   const [busy, setBusy] = useState(false)
@@ -26,6 +27,17 @@ export default function NetDetect({ auto, version, current, onAdd }: { auto: boo
   useEffect(() => { run() }, [run, version])
 
   const pend = (d?.suggestions ?? []).filter((i) => !inField.has(i.cidr))
+
+  useEffect(() => {
+    if (!autoAdd || did.current || !d) return
+    did.current = true
+    const all = [...d.items, ...d.suggestions].map((i) => i.cidr).filter((c) => !inField.has(c))
+    if (all.length) {
+      onAdd(all)
+      setAdded(`${all.length} rede(s) encontrada(s) já adicionada(s) à lista. Remova as que não quiser`)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d, autoAdd])
 
   const add = (list: string[], msg: string) => {
     onAdd(list)

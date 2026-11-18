@@ -239,7 +239,7 @@ func (a *App) suggestedNets(ctx context.Context, r *http.Request, have map[strin
 	return out
 }
 
-func (a *App) mergedRelayNetsText() string {
+func (a *App) mergedRelayNetsText(r *http.Request) string {
 	var lines []string
 	seen := map[string]bool{}
 	add := func(s string) {
@@ -251,8 +251,28 @@ func (a *App) mergedRelayNetsText() string {
 	for _, l := range strings.Split(a.sStr("relay_nets"), "\n") {
 		add(l)
 	}
+	have := map[string]bool{}
 	for _, d := range a.detectedNets() {
+		have[d.CIDR] = true
+		add(d.CIDR)
+	}
+	for _, d := range a.suggestedNets(r.Context(), r, have) {
 		add(d.CIDR)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func hostnameFromRequest(r *http.Request) string {
+	h := r.Host
+	if hh, _, err := net.SplitHostPort(h); err == nil {
+		h = hh
+	}
+	h = strings.ToLower(strings.Trim(h, "[]"))
+	if h == "" || !strings.Contains(h, ".") || strings.EqualFold(h, "localhost") {
+		return ""
+	}
+	if _, err := netip.ParseAddr(h); err == nil {
+		return ""
+	}
+	return h
 }

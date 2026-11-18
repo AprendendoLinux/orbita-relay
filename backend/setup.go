@@ -136,6 +136,11 @@ func (a *App) handleSetupAdmin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "usuário inválido")
 		return
 	}
+	in.Email = strings.TrimSpace(in.Email)
+	if !reEmail.MatchString(in.Email) {
+		writeErr(w, 400, "informe um e-mail válido (obrigatório)")
+		return
+	}
 	if err := validPassword(in.Password); err != nil {
 		writeErr(w, 400, err.Error())
 		return
@@ -162,5 +167,12 @@ func (a *App) handleSetupAdmin(w http.ResponseWriter, r *http.Request) {
 	_ = a.createSession(r.Context(), w, r, uid)
 	a.audit(r.Context(), in.Username, "setup.complete", "")
 	_ = os.Remove(filepath.Join(a.dataDir, "setup.token"))
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+func (a *App) handleSetupCheck(w http.ResponseWriter, r *http.Request) {
+	if !a.checkSetup(w, r) {
+		return
+	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

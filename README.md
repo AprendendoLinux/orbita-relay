@@ -39,7 +39,7 @@ O nome do serviço, do container e do hostname é o mesmo, então os comandos s�
 Com o campo "Hostname do relay (HELO)" vazio, o Exim se apresenta como `orbitarelay-mta`. Em produção, preencha com o nome DNS real do servidor (o mesmo do PTR e do SPF).
 
 A conexão com o MySQL (host, porta, banco, usuário, senha, SSL) fica no `docker-compose.yml` (variáveis `ORBITA_DB_*`). **Troque a senha padrão `orbita` antes de usar em produção.**
-Acesse `http://servidor:8080`, informe o token e crie o administrador; em seguida o assistente de configuração abre.
+Acesse `http://servidor:8080`. O primeiro acesso é feito em etapas: **Acesso** (token, nome do sistema, usuário e e-mail, obrigatório) e **Senha** (com confirmação, medidor de força e gerador de senha). Se o MySQL não estiver configurado pelo compose, há antes uma etapa de **Banco de dados**. Em seguida o assistente de configuração abre.
 
 No primeiro login um **assistente** guia a configuração (nome, fuso, modo Relay SMTP ou Smarthost, autenticação, logs); ele pode ser reaberto em Configurações.
 No modo Smarthost o menu Domínios e DKIM fica oculto; no modo Relay SMTP o painel mostra os registros SPF, DKIM e DMARC de cada domínio.
@@ -148,6 +148,8 @@ As configurações do MTA ficam em abas separadas por finalidade (e o assistente
 Em **Entrega e DNS** também ficam os domínios: cadastro, geração da chave DKIM e os registros SPF, DKIM e DMARC prontos para copiar, com verificação de DNS (a página **Domínios e DKIM** continua disponível no menu). O registro **SPF** é montado automaticamente: usa os IPs públicos de saída configurados; sem eles, usa `a:<hostname do relay>`; e, sem hostname, usa o próprio domínio adicionado (`a:<domínio>`), mostrando os IPs detectados pelo DNS e avisando se o domínio não tem registro A/AAAA. Ao adicionar um domínio, a chave DKIM (RSA 2048) já é gerada e ativada, e o nome do registro DKIM acompanha o **seletor** configurado (padrão `dkim`). A tela explica o que cada política DMARC faz (none, quarantine, reject). Em **Redes e acesso**, as redes detectadas e as sugestões aparecem numa única lista recolhível, com **Adicionar todos**.
 
 No modo Relay SMTP o assistente tem o passo **Entrega e DNS** (seletor DKIM, IPs públicos, DMARC, domínios com a chave DKIM e os registros de DNS), que não aparece no Smarthost. A explicação das políticas DMARC é uma linha discreta, com o link "Ver todas".
+
+O **hostname do relay (HELO)** é obrigatório e já vem preenchido com o endereço pelo qual o painel foi acessado. No passo **Redes** do assistente, todas as redes encontradas já são adicionadas à lista (remova as que não quiser).
 
 As abas seguem o modo escolhido na hora, mesmo antes de salvar, e os valores das abas ocultas não são apagados.
 
