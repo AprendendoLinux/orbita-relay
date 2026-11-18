@@ -227,6 +227,4 @@ button.danger:not(.sm):not(.ghost) { background: color-mix(in srgb, var(--danger
 .meter span.on.l4 { background: var(--success); box-shadow: 0 0 8px var(--success); }
 .meter em { font-style: normal; font-size: 12px; color: var(--muted); min-width: 78px; text-align: right; }
 
-.dns-row { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px 10px; align-items: center; }
-.dns-row .row { justify-content: flex-end; }
-@media (max-width: 760px) { .dns-row { grid-template-columns: 44px 1fr; } .dns-row > :nth-child(3) { grid-column: 2; } }
+.copy-ico { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; margin-left: 4px; font-size: 13px; line-height: 1; border-radius: 6px; vertical-align: middle; }
