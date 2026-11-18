@@ -37,7 +37,7 @@ apply_config() {
   chown root:Debian-exim "$CONF_DST"
   rm -rf /etc/exim4/dkim && mkdir -p /etc/exim4/dkim
   if [ -d /config/dkim ] && ls /config/dkim/*.key >/dev/null 2>&1; then
-    cp /config/dkim/*.key /etc/exim4/dkim/
+    cp /config/dkim/* /etc/exim4/dkim/
   fi
   chown -R root:Debian-exim /etc/exim4/dkim
   chmod 750 /etc/exim4/dkim

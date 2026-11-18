@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"strings"
 	"time"
 )
@@ -143,15 +144,79 @@ func (a *App) handleToggleDKIM(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
+func dnsServers() []string {
+	raw := strings.FieldsFunc(os.Getenv("ORBITA_DNS_SERVERS"), func(r rune) bool { return r == ',' || r == ' ' || r == ';' })
+	if len(raw) == 0 {
+		raw = []string{"8.8.8.8", "1.1.1.1"}
+	}
+	var out []string
+	for _, s := range raw {
+		if _, _, err := net.SplitHostPort(s); err != nil {
+			if strings.Contains(s, ":") {
+				s = "[" + s + "]"
+			}
+			s += ":53"
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func publicResolver(server string) *net.Resolver {
+	return &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		d := net.Dialer{Timeout: 3 * time.Second}
+		return d.DialContext(ctx, network, server)
+	}}
+}
+
+func resolveWith(ctx context.Context, f func(context.Context, *net.Resolver) ([]string, error)) ([]string, bool) {
+	for _, s := range dnsServers() {
+		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		out, err := f(cctx, publicResolver(s))
+		cancel()
+		if err == nil {
+			return out, true
+		}
+		var de *net.DNSError
+		if errors.As(err, &de) && de.IsNotFound {
+			return nil, true
+		}
+	}
+	return nil, false
+}
+
 func lookupTXT(ctx context.Context, name string) []string {
-	res := &net.Resolver{}
+	if out, ok := resolveWith(ctx, func(c context.Context, r *net.Resolver) ([]string, error) { return r.LookupTXT(c, name) }); ok {
+		return out
+	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	txt, err := res.LookupTXT(cctx, name)
+	txt, err := (&net.Resolver{}).LookupTXT(cctx, name)
 	if err != nil {
 		return nil
 	}
 	return txt
+}
+
+func lookupHostIPs(ctx context.Context, name string) []netip.Addr {
+	var out []netip.Addr
+	add := func(ss []string) {
+		for _, s := range ss {
+			if ip, err := netip.ParseAddr(s); err == nil {
+				out = append(out, ip.Unmap())
+			}
+		}
+	}
+	if ss, ok := resolveWith(ctx, func(c context.Context, r *net.Resolver) ([]string, error) { return r.LookupHost(c, name) }); ok {
+		add(ss)
+		return out
+	}
+	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if ss, err := (&net.Resolver{}).LookupHost(cctx, name); err == nil {
+		add(ss)
+	}
+	return out
 }
 
 func (a *App) handleCheckDomain(w http.ResponseWriter, r *http.Request) {
@@ -220,13 +285,11 @@ func (a *App) spfRecord(ctx context.Context, domain string) (string, string) {
 			note = "Usa o IP do hostname do relay (" + host + "), detectado pelo DNS."
 		} else {
 			parts = append(parts, "a:"+domain)
-			lc, cancel := context.WithTimeout(ctx, 2*time.Second)
-			ips, err := net.DefaultResolver.LookupNetIP(lc, "ip", domain)
-			cancel()
-			if err == nil && len(ips) > 0 {
+			ips := lookupHostIPs(ctx, domain)
+			if len(ips) > 0 {
 				var ss []string
 				for _, ip := range ips {
-					ss = append(ss, ip.Unmap().String())
+					ss = append(ss, ip.String())
 				}
 				note = "Autoriza o IP do próprio domínio (" + strings.Join(ss, ", ") + "), detectado pelo DNS."
 			} else {

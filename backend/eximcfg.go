@@ -123,7 +123,7 @@ smarthost_login:
 
 const dkimTemplate = `{{define "dkim"}}{{if .DKIMDomains}}  dkim_domain = ${if inlist{${lc:${domain:$h_from:}}}{<; {{.DKIMDomains}}}{${lc:${domain:$h_from:}}}{}}
   dkim_selector = {{.Selector}}
-  dkim_private_key = /etc/exim4/dkim/$dkim_domain.key
+  dkim_private_key = ${lookup{$dkim_domain}lsearch{/etc/exim4/dkim/map}}
   dkim_canon = relaxed
 {{end}}{{end}}`
 
@@ -229,7 +229,15 @@ func (a *App) renderMTA(ctx context.Context) error {
 		names = append(names, d)
 	}
 	sort.Strings(names)
-	keep := map[string]bool{}
+	keep := map[string]bool{"map": true}
+	var dmap strings.Builder
+	for _, d := range names {
+		dmap.WriteString(d + ": /etc/exim4/dkim/" + d + ".key\n")
+	}
+	h.Write([]byte("map" + dmap.String()))
+	if err := writeAtomic(filepath.Join(a.configDir, "dkim", "map"), []byte(dmap.String()), 0o600); err != nil {
+		return err
+	}
 	for _, d := range names {
 		fn := d + ".key"
 		keep[fn] = true
