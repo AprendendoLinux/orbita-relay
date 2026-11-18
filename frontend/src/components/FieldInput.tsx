@@ -9,6 +9,7 @@ const optionLabels: Record<string, string> = {
   local: 'Local', ldap: 'LDAP / Active Directory',
   none: 'Nenhuma', starttls: 'STARTTLS', tls: 'TLS implícito (SMTPS)', ldaps: 'LDAPS',
   standalone: 'Standalone (instalação única)', server: 'Servidor central (recebe de outros relays)', client: 'Cliente (envia a um servidor central)',
+  dark: 'Escuro', light: 'Claro',
   https: 'HTTPS (recomendado)', http: 'HTTP (sem criptografia)',
   dual: 'IPv4 + IPv6', ipv4: 'Somente IPv4', quarantine: 'quarantine', reject: 'reject',
 }

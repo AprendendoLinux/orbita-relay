@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api'
+import { useDialog } from '../components/Dialog'
 
 type Domain = {
   id: number; domain: string; dkim_enabled: boolean; dkim_record?: string; dkim_host?: string
@@ -46,6 +47,7 @@ function Record({ title, host, value, check, note }: { title: string; host: stri
 }
 
 export default function Domains() {
+  const dlg = useDialog()
   const [list, setList] = useState<Domain[]>([])
   const [name, setName] = useState('')
   const [msg, setMsg] = useState<{ t: 'ok' | 'err'; s: string } | null>(null)
@@ -104,7 +106,7 @@ export default function Domains() {
                       {d.dkim_enabled ? 'Pausar' : 'Ativar'}
                     </button>
                   )}
-                  <button className="sm danger" onClick={() => confirm(`Remover ${d.domain}?`) && act(() => api(`/api/admin/domains/${d.id}`, { method: 'DELETE' }), 'Domínio removido')}>Remover</button>
+                  <button className="sm danger" onClick={async () => (await dlg.confirm({ title: `Remover ${d.domain}?`, message: 'O domínio e a chave DKIM dele serão removidos. Remetentes desse domínio deixam de ser aceitos.', danger: true, confirmLabel: 'Remover' })) && act(() => api(`/api/admin/domains/${d.id}`, { method: 'DELETE' }), 'Domínio removido')}>Remover</button>
                 </div>
               </div>
               <div className="grid cols-2">

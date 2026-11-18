@@ -180,6 +180,52 @@ var schema = []string{
 	  last_ip VARCHAR(64) NOT NULL DEFAULT '',
 	  version VARCHAR(32) NOT NULL DEFAULT ''
 	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS mfa_challenges (
+	  token_hash CHAR(64) PRIMARY KEY,
+	  user_id BIGINT NOT NULL,
+	  method VARCHAR(8) NOT NULL,
+	  code_hash CHAR(64) NULL,
+	  attempts INT NOT NULL DEFAULT 0,
+	  sent_at DATETIME(6) NOT NULL,
+	  expires_at DATETIME(6) NOT NULL,
+	  INDEX mfa_ch_user_idx (user_id)
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS mfa_pending (
+	  user_id BIGINT NOT NULL,
+	  kind VARCHAR(8) NOT NULL,
+	  secret TEXT NOT NULL,
+	  email VARCHAR(255) NOT NULL DEFAULT '',
+	  attempts INT NOT NULL DEFAULT 0,
+	  expires_at DATETIME(6) NOT NULL,
+	  PRIMARY KEY (user_id, kind)
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS password_resets (
+	  user_id BIGINT PRIMARY KEY,
+	  code_hash CHAR(64) NOT NULL,
+	  attempts INT NOT NULL DEFAULT 0,
+	  sent_at DATETIME(6) NOT NULL,
+	  expires_at DATETIME(6) NOT NULL
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS email_changes (
+	  user_id BIGINT PRIMARY KEY,
+	  new_email VARCHAR(255) NOT NULL,
+	  token_hash CHAR(64) NOT NULL,
+	  expires_at DATETIME(6) NOT NULL,
+	  INDEX email_changes_tok_idx (token_hash)
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS trusted_devices (
+	  token_hash CHAR(64) PRIMARY KEY,
+	  user_id BIGINT NOT NULL,
+	  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	  expires_at DATETIME(6) NOT NULL,
+	  ip VARCHAR(64) NOT NULL DEFAULT '',
+	  INDEX trusted_user_idx (user_id)
+	) DEFAULT CHARSET=utf8mb4`,
+	`CREATE TABLE IF NOT EXISTS mfa_recovery (
+	  user_id BIGINT NOT NULL,
+	  code_hash CHAR(64) NOT NULL,
+	  PRIMARY KEY (user_id, code_hash)
+	) DEFAULT CHARSET=utf8mb4`,
 	`CREATE TABLE IF NOT EXISTS audit_log (
 	  id BIGINT AUTO_INCREMENT PRIMARY KEY,
 	  at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -216,6 +262,11 @@ func (a *App) migrate(ctx context.Context) error {
 		{func() bool { return a.hasIndex(ctx, "messages", "uq_node_exim") }, `ALTER TABLE messages ADD UNIQUE KEY uq_node_exim (node_id, exim_id)`},
 		{func() bool { return !a.hasIndex(ctx, "messages", "exim_id") }, `ALTER TABLE messages DROP INDEX exim_id`},
 		{func() bool { return a.hasIndex(ctx, "messages", "messages_node_idx") }, `ALTER TABLE messages ADD INDEX messages_node_idx (node_id, received_at)`},
+		{func() bool { return a.hasIndex(ctx, "password_resets", "pr_hash_idx") }, `ALTER TABLE password_resets ADD INDEX pr_hash_idx (code_hash)`},
+		{func() bool { return a.hasColumn(ctx, "users", "mfa_method") }, `ALTER TABLE users ADD COLUMN mfa_method VARCHAR(8) NOT NULL DEFAULT ''`},
+		{func() bool { return a.hasColumn(ctx, "users", "totp_secret") }, `ALTER TABLE users ADD COLUMN totp_secret TEXT NULL`},
+		{func() bool { return a.hasColumn(ctx, "users", "mfa_email") }, `ALTER TABLE users ADD COLUMN mfa_email VARCHAR(255) NOT NULL DEFAULT ''`},
+		{func() bool { return a.hasColumn(ctx, "users", "totp_last") }, `ALTER TABLE users ADD COLUMN totp_last BIGINT NOT NULL DEFAULT 0`},
 		{func() bool { return a.hasColumn(ctx, "messages", "direction") }, `ALTER TABLE messages ADD COLUMN direction VARCHAR(8) NOT NULL DEFAULT ''`},
 		{func() bool { return a.hasColumn(ctx, "nodes", "kind") }, `ALTER TABLE nodes ADD COLUMN kind VARCHAR(12) NOT NULL DEFAULT 'relay'`},
 		{func() bool { return a.hasColumn(ctx, "nodes", "url") }, `ALTER TABLE nodes ADD COLUMN url VARCHAR(255) NOT NULL DEFAULT ''`},
@@ -236,6 +287,7 @@ func (a *App) migrate(ctx context.Context) error {
 			return err
 		}
 	}
+	_, _ = a.exec(ctx, `UPDATE users SET role='viewer' WHERE role='operator'`)
 	return nil
 }
 

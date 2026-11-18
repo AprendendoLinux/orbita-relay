@@ -159,16 +159,7 @@ func (a *App) renderMTA(ctx context.Context) error {
 		Port:     a.sInt("smarthost_port"),
 		TLS:      a.sStr("smarthost_tls"),
 	}
-	var nets []string
-	for _, l := range strings.Split(a.sStr("relay_nets"), "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			nets = append(nets, l)
-		}
-	}
-	if len(nets) == 0 {
-		nets = []string{"127.0.0.1", "::1"}
-	}
-	v.RelayNets = strings.Join(nets, " ; ")
+	v.RelayNets = strings.Join(a.effectiveRelayNets(), " ; ")
 	v.Gateways = strings.Join(dockerGateways(), " ; ")
 
 	relayMode := a.sStr("relay_mode") != "smarthost"

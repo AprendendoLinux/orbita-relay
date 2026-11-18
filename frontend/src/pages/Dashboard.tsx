@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, statusLabel } from '../api'
 import NodeSelect, { useServerMode } from '../components/NodeSelect'
+import RefreshBar, { useRefresh } from '../components/RefreshBar'
+import { useBranding } from '../branding'
+import HideFilters, { hideParam, useHideDefault } from '../components/HideFilters'
 
 type Stats = {
   days: number
@@ -89,12 +92,24 @@ export default function Dashboard() {
   const server = useServerMode()
   const [node, setNode] = useState('')
   const [days, setDays] = useState(7)
+  const hideDef = useHideDefault()
+  const [hide, setHide] = useState(hideDef)
   const [s, setS] = useState<Stats | null>(null)
   const [err, setErr] = useState('')
 
-  useEffect(() => {
-    api<Stats>(`/api/stats?days=${days}${node ? `&node=${node}` : ''}`).then(setS).catch((e) => setErr((e as Error).message))
-  }, [days, node])
+  const { branding } = useBranding()
+  const load = useCallback(async () => {
+    try {
+      setS(await api<Stats>(`/api/stats?days=${days}&hide=${hideParam(hide)}${node ? `&node=${node}` : ''}`))
+      setErr('')
+    } catch (e) {
+      setErr((e as Error).message)
+      throw e
+    }
+  }, [days, node, hide])
+  const refresh = useRefresh(load)
+  const { run } = refresh
+  useEffect(() => { run() }, [load, run])
 
   const total = s ? Object.values(s.totals).reduce((a, b) => a + b, 0) : 0
   return (
@@ -103,13 +118,15 @@ export default function Dashboard() {
         <h1>Painel</h1>
         <div className="row">
         {server && <NodeSelect value={node} onChange={setNode} />}
-        <label className="f" style={{ width: 170 }}>
-          <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Período">
+        <label className="f" style={{ width: 170 }}>Período
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
             {[1, 7, 30, 90, 365].map((d) => <option key={d} value={d}>Últimos {d} {d === 1 ? 'dia' : 'dias'}</option>)}
           </select>
         </label>
         </div>
       </div>
+      <RefreshBar r={refresh} tz={branding?.timezone} />
+      <div style={{ marginBottom: 14 }}><HideFilters value={hide} onChange={setHide} /></div>
       {err && <div className="alert err">{err}</div>}
       {s && (
         <div className="stack">

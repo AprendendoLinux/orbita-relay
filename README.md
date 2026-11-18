@@ -2,10 +2,12 @@
 
 Relay SMTP (Exim) + painel de relatórios, unificando `clubenaval/relatorios-smtp` e `AprendendoLinux/exim-relay`.
 
-- **Backend:** Go (API, ingestão de logs, gerador de config do Exim)
+- **Backend:** Go (API, ingestão de logs, gerador de config do Exim, coleta de servidores Mailcow, geração de PDF)
 - **Frontend:** React + TypeScript (Vite), visual futurista com modo claro/escuro
 - **Banco:** MySQL (`mysql:latest`)
 - **MTA:** Exim 4.96 com configuração gerada pelo painel
+
+**Recursos principais:** relay SMTP com DKIM/SPF/DMARC, relatórios com filtros e exportação (CSV e PDF), vários servidores (central e clientes), servidores Mailcow, 2FA (aplicativo ou e-mail), recuperação de senha por e-mail, login local e LDAP/AD, diagnóstico de IPv6 no Docker e detecção automática das redes autorizadas.
 
 ## Subir
 
@@ -13,6 +15,16 @@ Relay SMTP (Exim) + painel de relatórios, unificando `clubenaval/relatorios-smt
 docker compose up -d
 docker compose logs orbitarelay-app | grep TOKEN
 ```
+
+## Atualizando
+
+As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app` e `ghcr.io/aprendendolinux/orbita-relay-mta` (tags por versão e `latest`). Para atualizar, troque a tag no `docker-compose.yml` (ou use `latest`) e rode:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Atualize **as duas imagens** (app e mta) juntas. O banco é migrado automaticamente na inicialização, sem perda de dados.
 
 ## Containers
 
@@ -32,7 +44,7 @@ Acesse `http://servidor:8080`, informe o token e crie o administrador; em seguid
 No primeiro login um **assistente** guia a configuração (nome, fuso, modo Relay SMTP ou Smarthost, autenticação, logs); ele pode ser reaberto em Configurações.
 No modo Smarthost o menu Domínios e DKIM fica oculto; no modo Relay SMTP o painel mostra os registros SPF, DKIM e DMARC de cada domínio.
 
-Todo o resto (LDAP, domínios, DKIM, smarthost, redes autorizadas, IPv6, retenção) é configurado no painel.
+Todo o resto (LDAP, domínios, DKIM, smarthost, redes autorizadas, IPv6, SMTP do sistema, retenção, tema padrão) é configurado no painel.
 Segredos ficam criptografados (AES-256-GCM) com a chave `/data/master.key`. **Faça backup do volume `app-data`.**
 
 ## Diretórios mapeados (bind mounts)
@@ -54,6 +66,15 @@ O Docker cria os diretórios que não existem como `root`. Para isso não causar
 - O MySQL e o Exim ajustam os próprios diretórios na inicialização.
 
 Não é necessário rodar `chown` manualmente. Se você iniciar o container com `--user`, o ajuste é ignorado e o diretório precisa já estar com a permissão correta.
+
+## Variáveis de ambiente (serviço `orbitarelay-app`)
+
+| Variável | Função |
+|---|---|
+| `ORBITA_DB_HOST`, `ORBITA_DB_PORT`, `ORBITA_DB_NAME`, `ORBITA_DB_USER`, `ORBITA_DB_PASSWORD`, `ORBITA_DB_SSL` | Conexão com o MySQL |
+| `ORBITA_DOCKER_API` | Endereço do `orbitarelay-proxy`, usado no diagnóstico de IPv6 |
+| `ORBITA_HOST_IPS` | (opcional) IPs ou CIDRs da máquina, separados por vírgula, incluídos nas redes autorizadas |
+| `ORBITA_DOCKER_GATEWAYS` | (opcional) gateways do Docker a recusar, se a detecção automática não bastar |
 
 ## Logs do Exim
 
@@ -127,21 +148,72 @@ Como funciona:
 - O OrbitaRelay consulta a cada 30 segundos os logs `postfix` e `rspamd-history` (`GET /api/v1/get/logs/...`, cabeçalho `X-API-Key`) e correlaciona as duas fontes pelo ID de fila e pelo `Message-ID`.
 - Cada mensagem aparece em **Mensagens** com o nome do servidor, o sentido (↓ recebida, ↑ enviada), os destinatários e o resultado da entrega (entregue, adiada ou falha). Rejeições do Rspamd aparecem como falha.
 - Sentido: mensagens autenticadas por um usuário do Mailcow contam como enviadas; as demais, como recebidas.
+- Mensagens de que o Mailcow já não guarda o log de entrega do Postfix aparecem como **Aceita** (o Rspamd aceitou, sem confirmação de entrega). Avisos gerados pelo próprio Postfix (atraso ou devolução, sem remetente) aparecem com o assunto "Notificação gerada pelo Postfix". Campos vazios mostram "Sem remetente", "Sem assunto", "Sem destinatário" e "Sem origem".
 - A chave de API fica criptografada (AES-256-GCM) no banco. O histórico inicial é limitado ao que o Mailcow mantém nos logs.
 - Se o servidor ficar indisponível, o erro aparece na lista e a coleta continua de onde parou assim que ele voltar, desde que os logs do Mailcow ainda cubram o período.
 
+## Relatório em PDF e atualização automática
+
+- **Exportar CSV** (em Mensagens) também abre uma janela com os mesmos filtros, para não exportar tudo.
+- **Exportar PDF** (em Mensagens): abre uma janela para escolher período, status, sentido, servidor, remetente, destinatário, origem e busca, além do conteúdo (resumo com gráfico, servidor, origem, tamanho, ID), a ordem e o limite de mensagens. O arquivo sai em A4 vertical, tema claro, com o logo do sistema; textos longos quebram linha em vez de serem cortados.
+- **Atualização automática**: Mensagens e Painel se atualizam sozinhos (a cada 15, 30, 60 ou 120 s) enquanto a aba está visível. Há uma chave para ligar e desligar e o botão **Atualizar** para buscar na hora. A preferência fica salva no navegador.
+
+## Autenticação em dois fatores (2FA)
+
+Cada usuário, local ou do LDAP/AD, ativa o 2FA em **Segurança (2FA)**:
+
+- **Aplicativo autenticador** (recomendado): QR Code ou chave manual, compatível com Google Authenticator, Microsoft Authenticator, Authy, 1Password e Bitwarden (TOTP, 6 dígitos, 30 s).
+- **Código por e-mail**: exige configurar o SMTP em **Configurações > E-mail do sistema (2FA)**. O código vai sempre para o **e-mail cadastrado na conta** (o usuário não escolhe outro endereço). A configuração do SMTP fica salva no banco, aparece como resumo e é alterada pelo botão **Editar**.
+- Ao ativar, são gerados **10 códigos de recuperação** de uso único, exibidos uma só vez.
+- O login passa a pedir o código depois da senha. Há limite de tentativas e o mesmo código do aplicativo não pode ser reutilizado.
+- Ao informar o código no login, dá para marcar **Não pedir o código neste dispositivo por 30 dias**. O dispositivo confiável é revogado ao desativar o 2FA, ao trocar ou redefinir a senha e pelo botão "Remover todos" em Segurança (2FA).
+- **Desativar o 2FA** não pede o código: abre uma confirmação avisando do risco (e pede a senha, para usuários locais).
+- Um administrador pode **redefinir o 2FA** de um usuário em Usuários (por exemplo, se ele perdeu o celular e os códigos).
+- Dados sensíveis (segredo TOTP e senha do SMTP) ficam criptografados no banco (AES-256-GCM).
+
+## E-mails do sistema e recuperação de senha
+
+- Em **Configurações > E-mail do sistema (2FA)** informe o SMTP de saída (pode ser o seu próprio relay ou qualquer outro). Há um campo para enviar um e-mail de teste ao lado do botão.
+- Todos os e-mails do sistema (teste, códigos de 2FA, recuperação de senha, aviso de senha alterada) usam um modelo HTML com o logo e a identidade visual do sistema, mais uma versão em texto simples.
+- **Esqueci minha senha**: aparece no login quando o SMTP e o **Endereço público do painel** estão configurados (o endereço é preenchido sozinho na primeira vez que um administrador abre as Configurações pelo endereço real). Vale para usuários locais com e-mail cadastrado (usuários do LDAP/AD trocam a senha no diretório). O sistema envia um e-mail com um **botão/link para redefinir a senha**, válido por 30 minutos e de uso único; a resposta é sempre a mesma, exista ou não a conta.
+- **Alterar o próprio e-mail** (usuários locais, em **Minha conta**): o usuário informa o novo endereço e a senha atual, e recebe no **novo** e-mail um botão de confirmação (link de 1 hora). Só depois do clique o e-mail da conta muda, e um aviso vai para o e-mail antigo. Cada e-mail só pode estar em uma conta.
+- Ao redefinir a senha, todas as sessões do usuário são encerradas e, se a conta usa 2FA, ele continua sendo exigido no login.
+
+## Redes autorizadas a enviar (detecção automática)
+
+Em **Configurações > Servidor de e-mail**, a opção **Incluir automaticamente as redes detectadas** (ligada por padrão) soma à lista manual: o loopback, a rede Docker em que o contêiner está (IPv4 e IPv6, lida das interfaces dele) e os IPs da máquina conhecidos. A lista detectada aparece na própria tela e é recalculada ao iniciar e ao salvar.
+
+- Dentro do contêiner só é possível ver as interfaces dele. O IP da máquina é aprendido quando você acessa o painel por ele (ex.: `http://192.168.4.129:8080`) ou informado na variável `ORBITA_HOST_IPS` do serviço `orbitarelay-app` (separe por vírgula; aceita IP ou CIDR).
+- Conexões que chegam pelo gateway do Docker (IP mascarado) continuam sendo recusadas, mesmo dentro de uma rede autorizada.
+
+## Ocultar falhas (caixa inexistente e rejeições do Rspamd)
+
+Em **Mensagens**, no **Painel** e na janela de **Exportar PDF** há duas chaves:
+
+- **Ocultar falhas por caixa inexistente**: esconde mensagens que falharam só porque o destinatário não existe (respostas como `550 5.1.1`, "user unknown", "mailbox unavailable").
+- **Ocultar rejeições do Rspamd** (aparece com servidores Mailcow): esconde as mensagens barradas como spam.
+
+Só são ocultadas mensagens em que **todas** as falhas são desse tipo e que não foram entregues a nenhum outro destinatário. Os dados não são apagados: basta desligar a chave para ver tudo. A lista mostra quantas mensagens estão ocultas pelo filtro, e o PDF registra o filtro aplicado. Para deixar ligado por padrão, use **Configurações > Logs e retenção**.
+
+## Usuários e perfis
+
+Há dois perfis:
+
+- **Administrador:** acesso total (Configurações, Usuários, Domínios, Servidores, Mailcow, Auditoria e assistente).
+- **Leitura:** vê o Painel e as Mensagens, exporta CSV e PDF e cuida da própria conta (senha, e-mail e 2FA).
+
+Login local e/ou LDAP/AD (grupo de acesso e grupo administrador opcionais). Em **Usuários**, ao criar um usuário local o **e-mail é obrigatório** (e único por conta) e o botão **Gerar senha aleatória** cria uma senha de 16 caracteres só com letras maiúsculas, minúsculas e números, já preenchendo a senha e a confirmação, com botão para copiá-la.
+
 ## Aparência
 
-Visual futurista único, com alternância entre modo escuro (padrão) e claro, lembrada no navegador.
+Visual futurista único, com modo escuro e claro. O **modo padrão** do sistema é escolhido em **Configurações > Geral** (escuro por padrão) e vale para quem ainda não escolheu o próprio modo no botão do canto da tela; a escolha pessoal fica salva no navegador.
 
-## Perfis
-
-`admin` (tudo), `operator` e `viewer` (relatórios). Login local e/ou LDAP/AD (grupo de acesso e grupo admin opcionais).
+O sistema não usa pop-ups do navegador (`confirm`/`prompt`): confirmações e pedidos de dados abrem sempre uma janela própria.
 
 ## Estrutura
 
 ```
-backend/   API Go (auth, settings, domains/DKIM, eximcfg, ingest, reports)
+backend/   API Go (auth, 2FA, e-mails, settings, domains/DKIM, eximcfg, ingest, Mailcow, reports/PDF)
 frontend/  Painel React
 mta/       Imagem do Exim + entrypoint (aplica config, recarrega, rotaciona logs)
 ```
@@ -150,4 +222,9 @@ mta/       Imagem do Exim + entrypoint (aplica config, recarrega, rotaciona logs
 
 - Fila em tempo real (ver/reenviar/remover) e rejeições SMTP (reject log)
 - Alertas (Telegram/webhook/e-mail), monitor de blacklists, métricas Prometheus
-- Parser de relatórios DMARC, rate limiting por remetente, 2FA
+- Parser de relatórios DMARC, rate limiting por remetente
+- Envio das mensagens de um Mailcow do cliente para o servidor central
+
+## Licenças de terceiros
+
+Os relatórios em PDF usam a fonte Liberation Sans (SIL Open Font License 1.1), embutida em `backend/fonts/`.

@@ -27,11 +27,12 @@ export type User = {
   username: string
   display_name: string
   email: string
-  role: 'viewer' | 'operator' | 'admin'
+  role: 'viewer' | 'admin'
   source: string
   disabled: boolean
   created_at: string
   last_login: string | null
+  mfa?: string
 }
 
 export type Branding = {
@@ -45,12 +46,15 @@ export type Branding = {
   auth_mode?: string
   wizard_done?: boolean
   has_mailcow?: boolean
+  can_reset?: boolean
+  hide_default?: string
+  default_theme?: string
 }
 
 export const fmtDate = (iso: string, tz?: string) =>
   new Date(iso).toLocaleString('pt-BR', { timeZone: tz || undefined, dateStyle: 'short', timeStyle: 'medium' })
 
-export const roleLabel: Record<string, string> = { admin: 'Administrador', operator: 'Operador', viewer: 'Leitura' }
+export const roleLabel: Record<string, string> = { admin: 'Administrador', viewer: 'Leitura' }
 export const statusLabel: Record<string, string> = {
   delivered: 'Entregue',
   failed: 'Falha',

@@ -7,6 +7,7 @@ import '@fontsource/jetbrains-mono/600.css'
 import './styles.css'
 import App from './App'
 import { BrandingProvider } from './branding'
+import { DialogProvider } from './components/Dialog'
 import { initMode } from './components/ThemeToggle'
 
 initMode()
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <BrandingProvider>
-        <App />
+        <DialogProvider>
+          <App />
+        </DialogProvider>
       </BrandingProvider>
     </BrowserRouter>
   </React.StrictMode>,

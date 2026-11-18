@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, fmtDate, statusLabel } from '../api'
 import { useBranding } from '../branding'
 import NodeSelect, { useServerMode } from '../components/NodeSelect'
+import RefreshBar, { useRefresh } from '../components/RefreshBar'
+import ExportDialog from '../components/ExportDialog'
+import HideFilters, { hideParam, useHideDefault } from '../components/HideFilters'
 
 type Msg = {
   id: number
@@ -22,30 +25,43 @@ type Detail = {
   deliveries: { at: string; recipient: string; status: string; remote_host: string; remote_ip: string; detail: string }[]
 }
 
-const empty = { q: '', from: '', to: '', status: '', sender: '', recipient: '', host: '', node: '', direction: '' }
+const empty = { q: '', from: '', to: '', status: '', sender: '', recipient: '', host: '', node: '', direction: '', hide: '' }
 
 export default function Messages() {
   const { branding } = useBranding()
   const server = useServerMode()
   const tz = branding?.timezone
-  const [f, setF] = useState(empty)
-  const [applied, setApplied] = useState(empty)
+  const hideDef = useHideDefault()
+  const base = { ...empty, hide: hideDef }
+  const [f, setF] = useState(base)
+  const [applied, setApplied] = useState(base)
   const [page, setPage] = useState(1)
-  const [data, setData] = useState<{ total: number; size: number; items: Msg[] } | null>(null)
+  const [data, setData] = useState<{ total: number; size: number; items: Msg[]; hidden?: number } | null>(null)
   const [detail, setDetail] = useState<Detail | null>(null)
   const [err, setErr] = useState('')
+  const [exp, setExp] = useState<null | 'pdf' | 'csv'>(null)
 
   const qs = useCallback(() => {
     const p = new URLSearchParams()
-    Object.entries(applied).forEach(([k, v]) => v && p.set(k, v))
+    Object.entries(applied).forEach(([k, v]) => k !== 'hide' && v && p.set(k, v))
+    p.set('hide', hideParam(applied.hide))
     return p
   }, [applied])
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     const p = qs()
     p.set('page', String(page))
-    api<{ total: number; size: number; items: Msg[] }>(`/api/messages?${p}`).then(setData).catch((e) => setErr((e as Error).message))
+    try {
+      setData(await api<{ total: number; size: number; items: Msg[]; hidden?: number }>(`/api/messages?${p}`))
+      setErr('')
+    } catch (e) {
+      setErr((e as Error).message)
+      throw e
+    }
   }, [qs, page])
+  const refresh = useRefresh(load)
+  const { run } = refresh
+  useEffect(() => { run() }, [load, run])
 
   const open = async (id: number) => setDetail(await api<Detail>(`/api/messages/${id}`))
   const pages = data ? Math.max(1, Math.ceil(data.total / data.size)) : 1
@@ -56,10 +72,11 @@ export default function Messages() {
       <div className="topbar">
         <h1>Mensagens</h1>
         <div className="row noprint">
-          <a className="btn" href={`/api/messages/export?${qs()}`}>⇩ Exportar CSV</a>
-          <button onClick={() => window.print()}>⎙ Imprimir</button>
+          <button onClick={() => setExp('csv')}>⇩ Exportar CSV</button>
+          <button onClick={() => setExp('pdf')}>⎙ Exportar PDF</button>
         </div>
       </div>
+      <RefreshBar r={refresh} tz={tz} />
       <form
         className="glass card noprint"
         onSubmit={(e) => { e.preventDefault(); setPage(1); setApplied(f) }}
@@ -88,15 +105,16 @@ export default function Messages() {
           <label className="f">Origem (host/IP)<input value={f.host} onChange={set('host')} /></label>
           {server && <NodeSelect value={f.node} onChange={(v) => setF({ ...f, node: v })} />}
         </div>
+        <div style={{ marginTop: 14 }}><HideFilters value={f.hide} onChange={(v) => setF({ ...f, hide: v })} /></div>
         <div className="row" style={{ marginTop: 14 }}>
           <button className="primary">Filtrar</button>
-          <button type="button" onClick={() => { setF(empty); setApplied(empty); setPage(1) }}>Limpar</button>
+          <button type="button" onClick={() => { setF(base); setApplied(base); setPage(1) }}>Limpar</button>
         </div>
       </form>
       {err && <div className="alert err" style={{ marginTop: 16 }}>{err}</div>}
       <div className="glass card" style={{ marginTop: 16 }}>
         <div className="row spread" style={{ marginBottom: 8 }}>
-          <span className="muted small">{data ? `${data.total} mensagem(ns)` : 'Carregando…'}</span>
+          <span className="muted small">{data ? `${data.total} mensagem(ns)${data.hidden ? ` · ${data.hidden} oculta(s) pelo filtro` : ''}` : 'Carregando…'}</span>
         </div>
         <div className="tablewrap">
           <table>
@@ -108,10 +126,10 @@ export default function Messages() {
                 <tr key={m.id} className="click" onClick={() => open(m.id)}>
                   <td className="mono" style={{ whiteSpace: 'nowrap' }}>{fmtDate(m.received_at, tz)}</td>
                   {server && <td className="wrap">{m.node || 'Local'}</td>}
-                  <td className="wrap">{m.direction === 'in' ? <span title="Recebida" style={{ color: 'var(--cyan, #22d3ee)' }}>↓ </span> : m.direction === 'out' ? <span title="Enviada" style={{ color: 'var(--green, #34d399)' }}>↑ </span> : null}{m.sender || '—'}</td>
-                  <td className="wrap">{m.recipients.slice(0, 3).join(', ')}{m.recipients.length > 3 ? ` +${m.recipients.length - 3}` : ''}</td>
-                  <td className="wrap">{m.subject || <span className="muted">(sem assunto)</span>}</td>
-                  <td className="wrap mono">{m.origin_host && m.origin_host !== m.origin_ip ? `${m.origin_host} ` : ''}{m.origin_ip}</td>
+                  <td className="wrap">{m.direction === 'in' ? <span title="Recebida" style={{ color: 'var(--cyan, #22d3ee)' }}>↓ </span> : m.direction === 'out' ? <span title="Enviada" style={{ color: 'var(--green, #34d399)' }}>↑ </span> : null}{m.sender || <span className="muted">Sem remetente</span>}</td>
+                  <td className="wrap">{m.recipients.length ? <>{m.recipients.slice(0, 3).join(', ')}{m.recipients.length > 3 ? ` +${m.recipients.length - 3}` : ''}</> : <span className="muted">Sem destinatário</span>}</td>
+                  <td className="wrap">{m.subject || <span className="muted">Sem assunto</span>}</td>
+                  <td className="wrap mono">{m.origin_host || m.origin_ip ? <>{m.origin_host && m.origin_host !== m.origin_ip ? `${m.origin_host} ` : ''}{m.origin_ip}</> : <span className="muted">Sem origem</span>}</td>
                   <td><span className={`badge b-${m.status}`}>{statusLabel[m.status] ?? m.status}</span></td>
                 </tr>
               ))}
@@ -126,6 +144,8 @@ export default function Messages() {
         </div>
       </div>
 
+      {exp && <ExportDialog initial={applied} kind={exp} onClose={() => setExp(null)} />}
+
       {detail && (
         <div className="modal-bg" onClick={() => setDetail(null)}>
           <div className="modal glass" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -137,9 +157,9 @@ export default function Messages() {
               {server && <div><span className="muted">Servidor:</span> {detail.message.node || 'Local'}</div>}
               <div><span className="muted">ID:</span> <span className="mono">{detail.message.exim_id}</span></div>
               <div><span className="muted">Data:</span> {fmtDate(detail.message.received_at, tz)}</div>
-              <div><span className="muted">Remetente:</span> {detail.message.sender}</div>
-              <div><span className="muted">Assunto:</span> {detail.message.subject}</div>
-              <div><span className="muted">Origem:</span> {detail.message.origin_host} <span className="mono">{detail.message.origin_ip}</span></div>
+              <div><span className="muted">Remetente:</span> {detail.message.sender || <span className="muted">Sem remetente</span>}</div>
+              <div><span className="muted">Assunto:</span> {detail.message.subject || <span className="muted">Sem assunto</span>}</div>
+              <div><span className="muted">Origem:</span> {detail.message.origin_host || detail.message.origin_ip ? <>{detail.message.origin_host} <span className="mono">{detail.message.origin_ip}</span></> : <span className="muted">Sem origem</span>}</div>
               <div><span className="muted">Tamanho:</span> {(detail.message.size / 1024).toFixed(1)} KB</div>
             </div>
             <h3 style={{ marginTop: 18 }}>Entregas</h3>

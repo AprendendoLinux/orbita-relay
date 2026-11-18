@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, fmtDate } from '../api'
+import { useDialog } from '../components/Dialog'
 import { useBranding } from '../branding'
 
 type Node = { id: number; name: string; disabled: boolean; created_at: string; last_seen: string | null; last_ip: string; version: string; messages: number }
 
 export default function Nodes() {
   const { branding } = useBranding()
+  const dlg = useDialog()
   const [list, setList] = useState<Node[]>([])
   const [name, setName] = useState('')
   const [token, setToken] = useState<{ name: string; token: string } | null>(null)
@@ -35,7 +37,7 @@ export default function Nodes() {
     })
   }
 
-  const rotate = (n: Node) => confirm(`Gerar novo token para "${n.name}"? O token atual deixa de funcionar.`) &&
+  const rotate = async (n: Node) => (await dlg.confirm({ title: `Gerar novo token para "${n.name}"?`, message: 'O token atual deixa de funcionar e o servidor precisará ser atualizado com o novo.', danger: true, confirmLabel: 'Gerar novo token' })) &&
     act(async () => setToken({ name: n.name, token: (await api<{ token: string }>(`/api/admin/nodes/${n.id}/token`, { method: 'POST' })).token }))
 
   const copy = async (t: string) => {
@@ -97,7 +99,7 @@ export default function Nodes() {
                     <div className="row">
                       <button className="sm" onClick={() => act(() => api(`/api/admin/nodes/${n.id}`, { method: 'PATCH', body: { disabled: !n.disabled } }))}>{n.disabled ? 'Ativar' : 'Desativar'}</button>
                       <button className="sm" onClick={() => rotate(n)}>Novo token</button>
-                      <button className="sm danger" onClick={() => confirm(`Remover "${n.name}" e todas as ${n.messages} mensagens recebidas dele?`) && act(() => api(`/api/admin/nodes/${n.id}`, { method: 'DELETE' }), 'Servidor removido')}>Remover</button>
+                      <button className="sm danger" onClick={async () => (await dlg.confirm({ title: `Remover "${n.name}"?`, message: `As ${n.messages} mensagens recebidas dele também serão apagadas. Esta ação não pode ser desfeita.`, danger: true, confirmLabel: 'Remover' })) && act(() => api(`/api/admin/nodes/${n.id}`, { method: 'DELETE' }), 'Servidor removido')}>Remover</button>
                     </div>
                   </td>
                 </tr>

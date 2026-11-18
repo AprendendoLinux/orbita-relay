@@ -10,7 +10,7 @@ export default function Setup() {
   const [step, setStep] = useState(branding?.db_ready ? 2 : 1)
   const [token, setToken] = useState('')
   const [db, setDb] = useState({ host: 'orbitarelay-db', port: '3306', user: 'orbita', password: '', name: 'orbita', sslmode: 'preferred' })
-  const [adm, setAdm] = useState({ app_name: 'OrbitaRelay', username: 'admin', email: '', password: '' })
+  const [adm, setAdm] = useState({ app_name: 'OrbitaRelay', username: 'admin', email: '', password: '', password_confirm: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const hdr = { 'X-Setup-Token': token.trim() }
@@ -35,8 +35,13 @@ export default function Setup() {
     })
   }
 
+  const mismatch = adm.password_confirm !== '' && adm.password !== adm.password_confirm
   const saveAdmin = (e: FormEvent) => {
     e.preventDefault()
+    if (adm.password !== adm.password_confirm) {
+      setErr('A confirmação da senha não confere')
+      return
+    }
     run(async () => {
       await api('/api/setup/admin', { method: 'POST', headers: hdr, body: adm })
       await refresh()
@@ -92,8 +97,13 @@ export default function Setup() {
               <label className="f">Senha (mín. 10 caracteres)
                 <input type="password" value={adm.password} onChange={(e) => setAdm({ ...adm, password: e.target.value })} minLength={10} required autoComplete="new-password" />
               </label>
+              <label className="f">Confirme a senha
+                <input type="password" value={adm.password_confirm} onChange={(e) => setAdm({ ...adm, password_confirm: e.target.value })} minLength={10} required autoComplete="new-password" aria-invalid={mismatch} />
+                {mismatch && <span className="help" style={{ color: 'var(--danger)' }}>As senhas não conferem</span>}
+                {adm.password_confirm !== '' && !mismatch && <span className="help" style={{ color: 'var(--success)' }}>As senhas conferem ✓</span>}
+              </label>
               {err && <div className="alert err" role="alert">{err}</div>}
-              <button className="primary" disabled={busy} style={{ justifyContent: 'center' }}>{busy ? 'Criando…' : 'Concluir'}</button>
+              <button className="primary" disabled={busy || mismatch} style={{ justifyContent: 'center' }}>{busy ? 'Criando…' : 'Concluir'}</button>
             </form>
           )}
         </div>

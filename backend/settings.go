@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -39,11 +40,13 @@ var settingGroups = []Group{
 	{"mta", "Servidor de e-mail"},
 	{"smarthost", "Smarthost"},
 	{"ldap", "Autenticação"},
+	{"seguranca", "E-mail do sistema (2FA)"},
 	{"logs", "Logs e retenção"},
 }
 
 var settingFields = []Field{
 	{Key: "app_name", Group: "geral", Label: "Nome do sistema", Type: "text", Default: "OrbitaRelay"},
+	{Key: "default_theme", Group: "geral", Label: "Modo de cores padrão", Type: "select", Default: "dark", Options: []string{"dark", "light"}, Help: "dark = escuro, light = claro. É o que aparece para quem ainda não escolheu o próprio modo no botão do canto da tela"},
 	{Key: "timezone", Group: "geral", Label: "Fuso horário", Type: "text", Default: "America/Sao_Paulo", Help: "Nome IANA, ex.: America/Sao_Paulo"},
 	{Key: "deploy_mode", Group: "geral", Label: "Implantação", Type: "select", Default: "standalone", Options: []string{"standalone", "server", "client"}, Help: "standalone = instalação única; servidor = recebe eventos de outros relays; cliente = envia eventos a um servidor central"},
 	{Key: "trust_proxy", Group: "geral", Label: "Estou atrás de um proxy reverso", Type: "bool", Default: false, Help: "Confia em X-Forwarded-For/Proto para identificar o IP real do cliente. Ative só se um proxy confiável estiver na frente"},
@@ -57,6 +60,7 @@ var settingFields = []Field{
 	{Key: "relay_mode", Group: "mta", Label: "Modo de operação", Type: "select", Default: "relay", Options: []string{"relay", "smarthost"}, Help: "relay = entrega direta (domínios, DKIM, SPF, DMARC); smarthost = encaminha por outro servidor SMTP"},
 	{Key: "mta_hostname", Group: "mta", Label: "Hostname do relay (HELO)", Type: "text", Default: "", Help: "Vazio usa o hostname do container"},
 	{Key: "relay_nets", Group: "mta", Label: "Redes autorizadas a enviar", Type: "textarea", Default: "127.0.0.1\n::1\n10.0.0.0/8\n192.168.0.0/16\nfd00::/8", Help: "Um IP ou CIDR (IPv4/IPv6) por linha"},
+	{Key: "relay_nets_auto", Group: "mta", Label: "Incluir automaticamente as redes detectadas", Type: "bool", Default: true, Help: "Soma à lista acima o loopback, a rede Docker em que o contêiner está e os IPs da máquina conhecidos. Veja a lista detectada abaixo"},
 	{Key: "enforce_sender_domains", Group: "mta", Label: "Restringir remetentes aos domínios cadastrados", Type: "bool", Default: true, Depends: "relay_mode=relay"},
 	{Key: "ip_mode", Group: "mta", Label: "Modo IP", Type: "select", Default: "dual", Options: []string{"dual", "ipv4"}, Help: "dual = IPv4 + IPv6"},
 	{Key: "max_message_mb", Group: "mta", Label: "Tamanho máximo da mensagem (MB)", Type: "number", Default: 25},
@@ -79,9 +83,20 @@ var settingFields = []Field{
 	{Key: "ldap_user_filter", Group: "ldap", Label: "Filtro de usuário", Type: "text", Default: "(sAMAccountName=%s)", Help: "%s é substituído pelo login", Depends: "auth_mode=ldap"},
 	{Key: "ldap_group_dn", Group: "ldap", Label: "Grupo com acesso (DN)", Type: "text", Default: "", Help: "Vazio libera qualquer usuário do Base DN", Depends: "auth_mode=ldap"},
 	{Key: "ldap_admin_group_dn", Group: "ldap", Label: "Grupo administrador (DN)", Type: "text", Default: "", Depends: "auth_mode=ldap"},
+	{Key: "smtp_host", Group: "seguranca", Label: "Servidor SMTP", Type: "text", Default: "", Help: "Usado para enviar códigos de verificação (2FA por e-mail). Pode ser o seu próprio relay ou qualquer SMTP"},
+	{Key: "smtp_port", Group: "seguranca", Label: "Porta", Type: "number", Default: 587},
+	{Key: "smtp_tls", Group: "seguranca", Label: "Criptografia", Type: "select", Default: "starttls", Options: []string{"none", "starttls", "tls"}, Help: "tls = SMTPS implícito (porta 465)"},
+	{Key: "smtp_skip_verify", Group: "seguranca", Label: "Ignorar validação do certificado", Type: "bool", Default: false},
+	{Key: "smtp_user", Group: "seguranca", Label: "Usuário (opcional)", Type: "text", Default: ""},
+	{Key: "smtp_pass", Group: "seguranca", Label: "Senha (opcional)", Type: "password", Default: "", Secret: true},
+	{Key: "smtp_from", Group: "seguranca", Label: "Remetente", Type: "text", Default: "", Help: "Endereço que aparece como remetente dos códigos"},
 	{Key: "db_retention_days", Group: "logs", Label: "Retenção no banco (dias)", Type: "number", Default: 365, Help: "Registros mais antigos são apagados automaticamente"},
 	{Key: "log_rotate_mb", Group: "logs", Label: "Rotacionar log do Exim ao atingir (MB)", Type: "number", Default: 50},
+	{Key: "known_host_ips", Group: "_sistema", Label: "IPs da máquina detectados", Type: "textarea", Default: ""},
+	{Key: "public_url", Group: "geral", Label: "Endereço público do painel", Type: "text", Default: "", Help: "Usado nos links dos e-mails (recuperação de senha, confirmação de e-mail). Preenchido sozinho com o endereço pelo qual você acessa o painel; ajuste se houver proxy ou outro nome. Ex.: https://relay.exemplo.com.br"},
 	{Key: "wizard_done", Group: "_sistema", Label: "Assistente concluído", Type: "bool", Default: false},
+	{Key: "hide_unknown_rcpt", Group: "logs", Label: "Ocultar por padrão falhas por caixa inexistente", Type: "bool", Default: false, Help: "Esconde da lista, do painel e dos relatórios as mensagens que falharam só porque o destinatário não existe (ex.: 550 5.1.1 user unknown). Os dados não são apagados e o filtro pode ser alterado em cada tela"},
+	{Key: "hide_rspamd_rejects", Group: "logs", Label: "Ocultar por padrão mensagens rejeitadas pelo Rspamd (Mailcow)", Type: "bool", Default: false, Help: "Esconde as mensagens barradas como spam pelo Rspamd. Os dados não são apagados"},
 	{Key: "log_keep_files", Group: "logs", Label: "Arquivos de log mantidos em disco", Type: "number", Default: 7, Help: "Rotação diária; arquivos antigos são compactados"},
 }
 
@@ -98,7 +113,7 @@ var fieldExamples = map[string]string{
 	"app_name": "Relay SMTP da Empresa", "timezone": "America/Sao_Paulo", "mta_hostname": "relay.dominio.local",
 	"relay_nets": "10.0.0.0/8, 192.168.1.0/24, 2001:db8::/32", "max_message_mb": "25", "dkim_selector": "orbita",
 	"public_ips": "203.0.113.10 e 2001:db8::10", "dmarc_policy": "none (monitorar) ou quarantine", "dmarc_rua": "dmarc@dominio.local",
-	"smarthost_host": "smtp.dominio.local", "smarthost_port": "587", "smarthost_user": "usuario@dominio.local", "smarthost_pass": "••••••••",
+	"smarthost_host": "smtp.dominio.local", "smarthost_port": "587", "smarthost_user": "usuario@dominio.local", "smarthost_pass": "••••••••", "public_url": "https://relay.dominio.local", "smtp_host": "smtp.dominio.local", "smtp_port": "587", "smtp_from": "orbita@dominio.local",
 	"ldap_host": "ad.dominio.local ou 192.168.0.10", "ldap_port": "389 (LDAP) ou 636 (LDAPS)", "ldap_domain": "@dominio.local",
 	"ldap_base_dn": "DC=dominio,DC=local", "ldap_user_filter": "(sAMAccountName=%s)",
 	"ldap_group_dn": "CN=GrupoAcesso,CN=Users,DC=dominio,DC=local", "ldap_admin_group_dn": "CN=Administradores,CN=Users,DC=dominio,DC=local",
@@ -173,7 +188,7 @@ func validateSetting(f *Field, v any) (any, error) {
 		}
 	}
 	switch f.Key {
-	case "mta_hostname", "smarthost_host", "ldap_host", "collect_host":
+	case "mta_hostname", "smarthost_host", "smtp_host", "ldap_host", "collect_host":
 		if s != "" && !reHost.MatchString(s) {
 			if _, err := netip.ParseAddr(s); err != nil {
 				return nil, errors.New("hostname inválido")
@@ -219,6 +234,22 @@ func validateSetting(f *Field, v any) (any, error) {
 		if _, err := time.LoadLocation(s); err != nil {
 			return nil, errors.New("fuso horário inválido")
 		}
+	case "known_host_ips":
+		for _, l := range strings.Split(s, "\n") {
+			if l = strings.TrimSpace(l); l != "" {
+				if _, err := netip.ParseAddr(l); err != nil {
+					return nil, fmt.Errorf("IP inválido: %s", l)
+				}
+			}
+		}
+	case "public_url":
+		if s != "" {
+			u, err := url.Parse(s)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.RawQuery != "" || u.Fragment != "" {
+				return nil, errors.New("informe uma URL completa, como https://relay.exemplo.com.br")
+			}
+			s = strings.TrimRight(u.Scheme+"://"+u.Host+u.Path, "/")
+		}
 	case "relay_nets":
 		for _, l := range strings.Split(s, "\n") {
 			l = strings.TrimSpace(l)
@@ -230,6 +261,14 @@ func validateSetting(f *Field, v any) (any, error) {
 					return nil, fmt.Errorf("rede inválida: %s", l)
 				}
 			}
+		}
+	case "smtp_from":
+		if s != "" && !reEmail.MatchString(s) {
+			return nil, errors.New("e-mail inválido")
+		}
+	case "smtp_user", "smtp_pass":
+		if strings.ContainsAny(s, "\r\n") {
+			return nil, errors.New("caractere inválido")
 		}
 	case "smarthost_user", "smarthost_pass":
 		if strings.ContainsAny(s, "^\n\r") {
@@ -324,6 +363,7 @@ func (a *App) setRaw(ctx context.Context, key string, v any) error {
 }
 
 func (a *App) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	a.autoPublicURL(r)
 	out := make([]Field, 0, len(settingFields))
 	for _, f := range settingFields {
 		if f.Secret {

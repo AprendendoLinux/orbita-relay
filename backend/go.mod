@@ -4,6 +4,7 @@ go 1.23
 
 require (
 	github.com/go-ldap/ldap/v3 v3.4.8
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/go-sql-driver/mysql v1.8.1
 	golang.org/x/crypto v0.28.0
 )

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, fmtDate } from '../api'
+import { useDialog } from '../components/Dialog'
 import { useBranding } from '../branding'
 
 type Srv = { id: number; name: string; url: string; disabled: boolean; skip_verify: boolean; last_sync: string | null; last_error: string; version: string; messages: number }
@@ -7,6 +8,7 @@ const blank = { name: '', url: '', api_key: '', skip_verify: false }
 
 export default function Mailcow() {
   const { branding, refresh } = useBranding()
+  const dlg = useDialog()
   const [list, setList] = useState<Srv[]>([])
   const [f, setF] = useState(blank)
   const [editing, setEditing] = useState<Srv | null>(null)
@@ -99,7 +101,7 @@ export default function Mailcow() {
                     <div className="row">
                       <button className="sm" onClick={() => edit(s)}>Editar</button>
                       <button className="sm" onClick={() => run(() => api(`/api/admin/nodes/${s.id}`, { method: 'PATCH', body: { disabled: !s.disabled } }), s.disabled ? 'Servidor ativado' : 'Servidor desativado')}>{s.disabled ? 'Ativar' : 'Desativar'}</button>
-                      <button className="sm danger" onClick={() => confirm(`Remover "${s.name}" e as ${s.messages} mensagens registradas dele?`) && run(() => api(`/api/admin/nodes/${s.id}`, { method: 'DELETE' }), 'Servidor removido')}>Remover</button>
+                      <button className="sm danger" onClick={async () => (await dlg.confirm({ title: `Remover "${s.name}"?`, message: `As ${s.messages} mensagens registradas dele também serão apagadas. Esta ação não pode ser desfeita.`, danger: true, confirmLabel: 'Remover' })) && run(() => api(`/api/admin/nodes/${s.id}`, { method: 'DELETE' }), 'Servidor removido')}>Remover</button>
                     </div>
                   </td>
                 </tr>

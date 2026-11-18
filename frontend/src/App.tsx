@@ -5,6 +5,9 @@ import { useBranding } from './branding'
 import Layout from './components/Layout'
 import Setup from './pages/Setup'
 import Login from './pages/Login'
+import Forgot from './pages/Forgot'
+import ResetPassword from './pages/ResetPassword'
+import ConfirmEmail from './pages/ConfirmEmail'
 import Dashboard from './pages/Dashboard'
 import Messages from './pages/Messages'
 import Domains from './pages/Domains'
@@ -14,6 +17,7 @@ import Audit from './pages/Audit'
 import Account from './pages/Account'
 import Nodes from './pages/Nodes'
 import Mailcow from './pages/Mailcow'
+import Security from './pages/Security'
 import Wizard from './pages/Wizard'
 
 export default function App() {
@@ -33,16 +37,28 @@ export default function App() {
   if (!branding) return null
   if (branding.setup_required) return <Setup />
   if (user === undefined) return null
-  if (user === null) return <Login />
+  if (user === null) {
+    return (
+      <Routes>
+        <Route path="recuperar-senha" element={<Forgot />} />
+        <Route path="redefinir-senha" element={<ResetPassword />} />
+        <Route path="confirmar-email" element={<ConfirmEmail />} />
+        <Route path="*" element={<Login />} />
+      </Routes>
+    )
+  }
 
   const admin = user.role === 'admin'
   const smarthost = branding.relay_mode === 'smarthost'
   if (admin && branding.wizard_done === false) return <Wizard first />
   return (
     <Routes>
+      <Route path="confirmar-email" element={<ConfirmEmail />} />
+      <Route path="redefinir-senha" element={<ResetPassword />} />
       <Route element={<Layout user={user} />}>
         <Route index element={<Dashboard />} />
         <Route path="mensagens" element={<Messages />} />
+        <Route path="seguranca" element={<Security />} />
         <Route path="conta" element={user.source === 'local' ? <Account /> : <Navigate to="/" replace />} />
         {admin && (
           <>

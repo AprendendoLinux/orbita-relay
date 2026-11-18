@@ -44,7 +44,57 @@ func nodeParam(r *http.Request) (int64, bool) {
 	return id, err == nil && id > 0
 }
 
-func (a *App) buildFilter(r *http.Request) (string, []any) {
+const unknownRcptRE = `5[.]1[.][01]|user unknown|unknown user|does not exist|no such user|mailbox unavailable|mailbox not found|unknown recipient|invalid recipient|user not found|no mailbox|undeliverable address`
+
+func (a *App) hideModes(r *http.Request) []string {
+	q := r.URL.Query()
+	if !q.Has("hide") {
+		var out []string
+		if a.sBool("hide_unknown_rcpt") {
+			out = append(out, "unknown")
+		}
+		if a.sBool("hide_rspamd_rejects") {
+			out = append(out, "rspamd")
+		}
+		return out
+	}
+	var out []string
+	for _, p := range strings.Split(q.Get("hide"), ",") {
+		if p = strings.TrimSpace(p); p == "unknown" || p == "rspamd" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func hideSQL(al string, modes []string) (string, []any) {
+	var parts []string
+	var args []any
+	for _, m := range modes {
+		var inner string
+		switch m {
+		case "unknown":
+			inner, args = "d.detail REGEXP ?", append(args, unknownRcptRE)
+		case "rspamd":
+			inner = "d.detail LIKE 'Rspamd:%'"
+		default:
+			continue
+		}
+		c := `(AL.status='failed'
+			AND EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=AL.id AND d.status='failed')
+			AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=AL.id AND d.status='failed' AND NOT (` + inner + `))
+			AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=AL.id AND d.status IN ('delivered','accepted','deferred')))`
+		parts = append(parts, strings.ReplaceAll(c, "AL", al))
+	}
+	if len(parts) == 0 {
+		return "", nil
+	}
+	return "NOT (" + strings.Join(parts, " OR ") + ")", args
+}
+
+func (a *App) buildFilter(r *http.Request) (string, []any) { return a.filterConds(r, true) }
+
+func (a *App) filterConds(r *http.Request, withHide bool) (string, []any) {
 	q := r.URL.Query()
 	var conds []string
 	var args []any
@@ -82,6 +132,11 @@ func (a *App) buildFilter(r *http.Request) (string, []any) {
 		p := "%" + likeEsc.Replace(s) + "%"
 		conds = append(conds, `(m.subject LIKE ? ESCAPE '\\' OR m.sender LIKE ? ESCAPE '\\' OR m.exim_id LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id=m.id AND d.recipient LIKE ? ESCAPE '\\'))`)
 		args = append(args, p, p, p, p)
+	}
+	if withHide {
+		if h, ha := hideSQL("m", a.hideModes(r)); h != "" {
+			conds, args = append(conds, h), append(args, ha...)
+		}
 	}
 	if len(conds) == 0 {
 		return "", args
@@ -132,7 +187,15 @@ func (a *App) handleMessages(w http.ResponseWriter, r *http.Request) {
 			out = append(out, m)
 		}
 	}
-	writeJSON(w, 200, map[string]any{"total": total, "page": page, "size": size, "items": out})
+	hidden := 0
+	if len(a.hideModes(r)) > 0 {
+		w2, a2 := a.filterConds(r, false)
+		var all int
+		if a.row(r.Context(), `SELECT count(*) FROM messages m`+w2, a2...).Scan(&all) == nil && all > total {
+			hidden = all - total
+		}
+	}
+	writeJSON(w, 200, map[string]any{"total": total, "page": page, "size": size, "items": out, "hidden": hidden})
 }
 
 func (a *App) handleMessageDetail(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +237,7 @@ func csvSafe(s string) string {
 
 func (a *App) handleExport(w http.ResponseWriter, r *http.Request) {
 	where, args := a.buildFilter(r)
-	rows, err := a.query(r.Context(), msgSelect+where+` ORDER BY m.received_at DESC LIMIT 200000`, args...)
+	rows, err := a.query(r.Context(), msgSelect+where+` ORDER BY m.received_at `+map[bool]string{true: "ASC", false: "DESC"}[r.URL.Query().Get("order") == "asc"]+` LIMIT 200000`, args...)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -242,8 +305,15 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 		nf, nargs = " AND node_id=?", []any{id}
 	}
 	df := strings.ReplaceAll(nf, "node_id", "m.node_id")
+	modes := a.hideModes(r)
+	hs, hargs := hideSQL("messages", modes)
+	hd, hdargs := hideSQL("m", modes)
+	hf, hdf := "", ""
+	if hs != "" {
+		hf, hdf = " AND "+hs, " AND "+hd
+	}
 	rows, err := a.query(ctx, `SELECT DATE_FORMAT(CONVERT_TZ(received_at,'+00:00',?),'%Y-%m-%d') AS d, status, count(*)
-		FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+nf+` GROUP BY d, status ORDER BY d`, append([]any{tz, days}, nargs...)...)
+		FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+nf+hf+` GROUP BY d, status ORDER BY d`, append(append([]any{tz, days}, nargs...), hargs...)...)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -258,8 +328,8 @@ func (a *App) handleStats(w http.ResponseWriter, r *http.Request) {
 	rows.Close()
 	writeJSON(w, 200, map[string]any{
 		"days": days, "totals": totals, "series": series,
-		"top_senders":           a.topList(ctx, `SELECT sender_domain, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) AND sender_domain<>''`+nf+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append([]any{days}, nargs...)...),
-		"top_hosts":             a.topList(ctx, `SELECT CASE WHEN origin_host<>'' THEN origin_host ELSE origin_ip END, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+nf+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append([]any{days}, nargs...)...),
-		"top_recipient_domains": a.topList(ctx, `SELECT SUBSTRING_INDEX(d.recipient,'@',-1), count(*) c FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE d.at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+df+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append([]any{days}, nargs...)...),
+		"top_senders":           a.topList(ctx, `SELECT sender_domain, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY) AND sender_domain<>''`+nf+hf+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append(append([]any{days}, nargs...), hargs...)...),
+		"top_hosts":             a.topList(ctx, `SELECT CASE WHEN origin_host<>'' THEN origin_host ELSE origin_ip END, count(*) c FROM messages WHERE received_at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+nf+hf+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append(append([]any{days}, nargs...), hargs...)...),
+		"top_recipient_domains": a.topList(ctx, `SELECT SUBSTRING_INDEX(d.recipient,'@',-1), count(*) c FROM deliveries d JOIN messages m ON m.id=d.message_id WHERE d.at >= DATE_SUB(UTC_TIMESTAMP(6), INTERVAL ? DAY)`+df+hdf+` GROUP BY 1 ORDER BY c DESC LIMIT 8`, append(append([]any{days}, nargs...), hdargs...)...),
 	})
 }

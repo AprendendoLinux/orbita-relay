@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -16,7 +17,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var version = "1.3.0"
+var version = "1.4.0"
 
 type App struct {
 	dataDir   string
@@ -33,6 +34,7 @@ type App struct {
 	setupToken string
 	limiter    *rateLimiter
 	collectRL  *rateLimiter
+	resetRL    *rateLimiter
 	push       pushStatus
 	mc         mcState
 }
@@ -92,6 +94,7 @@ func main() {
 		settings:  map[string]any{},
 		limiter:   newRateLimiter(10, 5*time.Minute),
 		collectRL: newRateLimiter(10, 5*time.Minute),
+		resetRL:   newRateLimiter(6, 15*time.Minute),
 	}
 	if err := os.MkdirAll(a.dataDir, 0o700); err != nil {
 		log.Fatal(err)
@@ -160,16 +163,26 @@ func main() {
 }
 
 func (a *App) handleBranding(w http.ResponseWriter, r *http.Request) {
-	out := map[string]any{"version": version, "setup_required": !a.setupDone(), "db_ready": a.ready(), "app_name": "OrbitaRelay"}
+	out := map[string]any{"version": version, "setup_required": !a.setupDone(), "db_ready": a.ready(), "app_name": "OrbitaRelay", "default_theme": "dark"}
 	if a.ready() {
 		out["app_name"] = a.sStr("app_name")
 		out["timezone"] = a.sStr("timezone")
+		out["default_theme"] = a.sStr("default_theme")
 		out["relay_mode"] = a.sStr("relay_mode")
 		out["deploy_mode"] = a.sStr("deploy_mode")
 		out["auth_mode"] = a.sStr("auth_mode")
 		var mc int
 		_ = a.row(r.Context(), `SELECT count(*) FROM nodes WHERE kind='mailcow'`).Scan(&mc)
 		out["has_mailcow"] = mc > 0
+		out["can_reset"] = a.canReset()
+		var hd []string
+		if a.sBool("hide_unknown_rcpt") {
+			hd = append(hd, "unknown")
+		}
+		if a.sBool("hide_rspamd_rejects") {
+			hd = append(hd, "rspamd")
+		}
+		out["hide_default"] = strings.Join(hd, ",")
 		out["wizard_done"] = a.sBool("wizard_done")
 	}
 	w.Header().Set("Cache-Control", "no-store")

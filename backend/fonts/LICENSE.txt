@@ -1,0 +1,4 @@
+Liberation Sans (Regular e Bold)
+Copyright (c) 2012 Red Hat, Inc., com Reserved Font Name "Liberation".
+Licenciada sob a SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+Usada para gerar os relatórios em PDF.

@@ -25,7 +25,7 @@ import (
 const (
 	mcHold      = 30 * time.Second
 	mcOverlap   = 120
-	mcFirstRows = 5000
+	mcFirstRows = 10000
 	mcMaxRows   = 20000
 )
 
@@ -33,6 +33,7 @@ var (
 	rePfMID   = regexp.MustCompile(`^([0-9A-Za-z]{6,20}): message-id=<(.*)>\s*$`)
 	rePfFrom  = regexp.MustCompile(`^([0-9A-Za-z]{6,20}): from=<([^>]*)>, size=(\d+)`)
 	rePfTo    = regexp.MustCompile(`^([0-9A-Za-z]{6,20}): to=<([^>]*)>, (?:orig_to=<[^>]*>, )?relay=([^\[,\s]*)(?:\[([^\]]*)\])?(?::\d+)?, .*?status=(\w+) ?(?:\((.*)\))?\s*$`)
+	reGenMID  = regexp.MustCompile(`^\d{14}\.`)
 	rePfDone  = regexp.MustCompile(`^([0-9A-Za-z]{6,20}): removed\s*$`)
 	mcNameErr = errors.New("nome inválido (2 a 60 caracteres: letras, números, espaço, ponto, hífen)")
 )
@@ -322,7 +323,14 @@ func mcPostfixLine(ctx context.Context, tx *sql.Tx, node int64, ts int64, l mcLo
 	msg := l.Message
 	run := func(q string, args ...any) error { _, err := tx.ExecContext(ctx, q, args...); return err }
 	if m := rePfMID.FindStringSubmatch(msg); m != nil {
-		mids[strings.ToLower(strings.TrimSpace(m[2]))] = mcMid{qid: m[1], at: time.Now()}
+		mid := strings.ToLower(strings.TrimSpace(m[2]))
+		mids[mid] = mcMid{qid: m[1], at: time.Now()}
+		if reGenMID.MatchString(mid) && strings.Contains(mid, "."+strings.ToLower(m[1])+"@") {
+			if err := mcStub(ctx, tx, node, m[1], at); err != nil {
+				return err
+			}
+			return run(`UPDATE messages SET subject=IF(subject='',?,subject) WHERE node_id=? AND exim_id=?`, "(Notificação gerada pelo Postfix: aviso de atraso ou devolução)", node, m[1])
+		}
 		return nil
 	}
 	if m := rePfFrom.FindStringSubmatch(msg); m != nil {
@@ -491,7 +499,7 @@ func (a *App) mailcowTick(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if j.sv < 2 {
+		if j.sv < 4 {
 			j.cr, j.cp = 0, 0
 		}
 		c, err := a.mcCreds(j.url, j.enc, j.skip)
@@ -510,7 +518,7 @@ func (a *App) mailcowTick(ctx context.Context) {
 			_, _ = a.exec(ctx, `UPDATE nodes SET last_error=? WHERE id=?`, msg, j.id)
 			continue
 		}
-		_, _ = a.exec(ctx, `UPDATE nodes SET cur_rspamd=?, cur_postfix=?, last_sync=UTC_TIMESTAMP(6), last_seen=UTC_TIMESTAMP(6), last_error='', sync_v=2, version=? WHERE id=?`, cr, cp, ver, j.id)
+		_, _ = a.exec(ctx, `UPDATE nodes SET cur_rspamd=?, cur_postfix=?, last_sync=UTC_TIMESTAMP(6), last_seen=UTC_TIMESTAMP(6), last_error='', sync_v=4, version=? WHERE id=?`, cr, cp, ver, j.id)
 	}
 }
 
@@ -609,7 +617,7 @@ func (a *App) handleCreateMailcow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "erro ao proteger a chave")
 		return
 	}
-	res, err := a.exec(r.Context(), `INSERT INTO nodes(name,token_hash,kind,url,api_key,skip_verify,version,sync_v) VALUES(?,?,'mailcow',?,?,?,?,2)`,
+	res, err := a.exec(r.Context(), `INSERT INTO nodes(name,token_hash,kind,url,api_key,skip_verify,version,sync_v) VALUES(?,?,'mailcow',?,?,?,?,4)`,
 		in.Name, hashToken(newNodeToken()), c.base, enc, c.skip, v)
 	if err != nil {
 		writeErr(w, 409, "já existe um servidor com esse nome")

@@ -29,13 +29,14 @@ type User struct {
 	Disabled    bool       `json:"disabled"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastLogin   *time.Time `json:"last_login"`
+	MFA         string     `json:"mfa"`
 }
 
 type ctxKey int
 
 const userKey ctxKey = 1
 
-var roleRank = map[string]int{"viewer": 1, "operator": 2, "admin": 3}
+var roleRank = map[string]int{"viewer": 1, "admin": 2}
 
 func userFrom(r *http.Request) *User {
 	u, _ := r.Context().Value(userKey).(*User)
@@ -133,10 +134,10 @@ func (a *App) userFromRequest(r *http.Request) *User {
 	}
 	var u User
 	err = a.row(r.Context(), `
-		SELECT u.id,u.username,u.display_name,u.email,u.role,u.source,u.disabled,u.created_at,u.last_login
+		SELECT u.id,u.username,u.display_name,u.email,u.role,u.source,u.disabled,u.created_at,u.last_login,u.mfa_method
 		FROM sessions s JOIN users u ON u.id=s.user_id
 		WHERE s.token_hash=? AND s.expires_at>UTC_TIMESTAMP(6) AND u.disabled=0`, hashToken(c.Value)).
-		Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Role, &u.Source, &u.Disabled, &u.CreatedAt, &u.LastLogin)
+		Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Role, &u.Source, &u.Disabled, &u.CreatedAt, &u.LastLogin, &u.MFA)
 	if err != nil {
 		return nil
 	}
@@ -208,6 +209,9 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		a.audit(ctx, in.Username, "login.fail", clientIP(r))
 		writeErr(w, 401, "usuário ou senha inválidos")
+		return
+	}
+	if a.startMFA(ctx, w, r, uid) {
 		return
 	}
 	if err := a.createSession(ctx, w, r, uid); err != nil {
@@ -310,6 +314,7 @@ func (a *App) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = a.exec(r.Context(), `UPDATE users SET password_hash=? WHERE id=?`, nh, u.ID)
+	_, _ = a.exec(r.Context(), `DELETE FROM trusted_devices WHERE user_id=?`, u.ID)
 	c, _ := r.Cookie(cookieName)
 	_, _ = a.exec(r.Context(), `DELETE FROM sessions WHERE user_id=? AND token_hash<>?`, u.ID, hashToken(c.Value))
 	a.audit(r.Context(), u.Username, "user.password", "")
@@ -317,7 +322,7 @@ func (a *App) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := a.query(r.Context(), `SELECT id,username,display_name,email,role,source,disabled,created_at,last_login FROM users ORDER BY username`)
+	rows, err := a.query(r.Context(), `SELECT id,username,display_name,email,role,source,disabled,created_at,last_login,mfa_method FROM users ORDER BY username`)
 	if err != nil {
 		writeErr(w, 500, "erro de banco")
 		return
@@ -326,7 +331,7 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	out := []User{}
 	for rows.Next() {
 		var u User
-		if rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Role, &u.Source, &u.Disabled, &u.CreatedAt, &u.LastLogin) == nil {
+		if rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.Role, &u.Source, &u.Disabled, &u.CreatedAt, &u.LastLogin, &u.MFA) == nil {
 			out = append(out, u)
 		}
 	}
@@ -348,6 +353,17 @@ func (a *App) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if roleRank[in.Role] == 0 {
 		writeErr(w, 400, "perfil inválido")
+		return
+	}
+	in.Email = strings.TrimSpace(in.Email)
+	if !reEmail.MatchString(in.Email) {
+		writeErr(w, 400, "informe um e-mail válido (obrigatório)")
+		return
+	}
+	var dup int
+	_ = a.row(r.Context(), `SELECT count(*) FROM users WHERE lower(email)=lower(?)`, in.Email).Scan(&dup)
+	if dup > 0 {
+		writeErr(w, 409, "já existe um usuário com esse e-mail")
 		return
 	}
 	if err := validPassword(in.Password); err != nil {
@@ -396,7 +412,20 @@ func (a *App) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		_, _ = a.exec(ctx, `UPDATE users SET display_name=? WHERE id=?`, *in.DisplayName, id)
 	}
 	if in.Email != nil {
-		_, _ = a.exec(ctx, `UPDATE users SET email=? WHERE id=?`, *in.Email, id)
+		e := strings.TrimSpace(*in.Email)
+		if e != "" {
+			if !reEmail.MatchString(e) {
+				writeErr(w, 400, "e-mail inválido")
+				return
+			}
+			var dup int
+			_ = a.row(ctx, `SELECT count(*) FROM users WHERE id<>? AND lower(email)=lower(?)`, id, e).Scan(&dup)
+			if dup > 0 {
+				writeErr(w, 409, "já existe um usuário com esse e-mail")
+				return
+			}
+		}
+		_, _ = a.exec(ctx, `UPDATE users SET email=? WHERE id=?`, e, id)
 	}
 	if in.Role != nil {
 		if roleRank[*in.Role] == 0 {
@@ -422,6 +451,7 @@ func (a *App) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		h, _ := hashPassword(*in.Password)
 		_, _ = a.exec(ctx, `UPDATE users SET password_hash=? WHERE id=?`, h, id)
+		_, _ = a.exec(ctx, `DELETE FROM trusted_devices WHERE user_id=?`, id)
 		_, _ = a.exec(ctx, `DELETE FROM sessions WHERE user_id=?`, id)
 	}
 	a.audit(ctx, me.Username, "user.update", target.Username)
@@ -439,6 +469,9 @@ func (a *App) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	if name == me.Username {
 		writeErr(w, 400, "você não pode excluir a si mesmo")
 		return
+	}
+	for _, t := range []string{"mfa_challenges", "mfa_pending", "mfa_recovery", "password_resets", "email_changes", "trusted_devices"} {
+		_, _ = a.exec(r.Context(), "DELETE FROM "+t+" WHERE user_id=?", id)
 	}
 	_, _ = a.exec(r.Context(), `DELETE FROM users WHERE id=?`, id)
 	a.audit(r.Context(), me.Username, "user.delete", name)

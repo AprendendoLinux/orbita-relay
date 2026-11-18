@@ -126,6 +126,7 @@ func (a *App) handleSetupAdmin(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Confirm  string `json:"password_confirm"`
 		AppName  string `json:"app_name"`
 	}
 	if !readJSON(w, r, &in) {
@@ -137,6 +138,10 @@ func (a *App) handleSetupAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := validPassword(in.Password); err != nil {
 		writeErr(w, 400, err.Error())
+		return
+	}
+	if in.Password != in.Confirm {
+		writeErr(w, 400, "a confirmação da senha não confere")
 		return
 	}
 	h, err := hashPassword(in.Password)
