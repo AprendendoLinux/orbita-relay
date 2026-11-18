@@ -76,13 +76,13 @@ export default function Ipv6Panel() {
         <span>{known ? `${st.docker.version} (API ${st.docker.api_version})` : 'não detectada'}</span>
         <span className="muted">IPv6 no daemon</span><span>{yn(st.docker.daemon_ipv6)}</span>
         <span className="muted">IPv6 no container</span>
-        <span>{st.container.ipv6 ? <>sim <span className="mono">{st.container.addresses[0]}</span></> : 'não'}</span>
+        <span>{st.container.ipv6 ? <>sim <span className="mono">{(st.container.addresses ?? [])[0]}</span></> : 'não'}</span>
         <span className="muted">Saída IPv6 à internet</span><span>{st.outbound6.ok ? 'sim' : 'não'}</span>
         <span className="muted">Origem mascarada</span>
         <span>{st.masked.count > 0 ? `sim (${st.masked.count}${st.masked.last ? `, última em ${st.masked.last}` : ''})` : 'não'}</span>
       </div>
       {st.level === 'ok' && <div className="alert ok">O Docker está preparado para IPv6: o container tem endereço IPv6, a saída funciona e o IP de origem das conexões é preservado.</div>}
-      {st.issues.map((i) => <div className="alert warn" key={i}>{i}</div>)}
+      {(st.issues ?? []).map((i) => <div className="alert warn" key={i}>{i}</div>)}
 
       {st.level !== 'ok' && (
         <div className="tip" role="note">

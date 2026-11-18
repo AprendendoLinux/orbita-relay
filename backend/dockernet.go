@@ -195,7 +195,7 @@ func (a *App) handleIPv6Status(w http.ResponseWriter, r *http.Request) {
 	ok6, detail := outbound6(ctx)
 	masked, last := a.maskedCount(ctx, gws)
 
-	var issues []string
+	issues := []string{}
 	if dk.Available && dk.DaemonIPv6 != nil && !*dk.DaemonIPv6 {
 		issues = append(issues, "O daemon do Docker não está com IPv6 habilitado.")
 	}
@@ -214,6 +214,12 @@ func (a *App) handleIPv6Status(w http.ResponseWriter, r *http.Request) {
 		if !has6 || !ok6 {
 			level = "off"
 		}
+	}
+	if addrs == nil {
+		addrs = []string{}
+	}
+	if gws == nil {
+		gws = []string{}
 	}
 	writeJSON(w, 200, map[string]any{
 		"level": level, "issues": issues, "docker": dk,

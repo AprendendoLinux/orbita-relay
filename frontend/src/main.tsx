@@ -8,6 +8,7 @@ import './styles.css'
 import App from './App'
 import { BrandingProvider } from './branding'
 import { DialogProvider } from './components/Dialog'
+import ErrorBoundary from './components/ErrorBoundary'
 import { initMode } from './components/ThemeToggle'
 
 initMode()
@@ -16,9 +17,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <BrandingProvider>
-        <DialogProvider>
-          <App />
-        </DialogProvider>
+        <ErrorBoundary>
+          <DialogProvider>
+            <App />
+          </DialogProvider>
+        </ErrorBoundary>
       </BrandingProvider>
     </BrowserRouter>
   </React.StrictMode>,
