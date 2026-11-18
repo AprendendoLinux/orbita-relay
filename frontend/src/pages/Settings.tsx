@@ -8,6 +8,7 @@ import Tip from '../components/Tip'
 import Ipv6Panel from '../components/Ipv6Panel'
 import HostSendTip from '../components/HostSendTip'
 import NetDetect from '../components/NetDetect'
+import Domains from './Domains'
 import { mergeLines } from '../lib'
 import { clearPersonalMode } from '../components/ThemeToggle'
 
@@ -163,6 +164,7 @@ export default function Settings() {
           {current === 'ldap' && vals.auth_mode === 'ldap' && <button onClick={testLdap}>Testar conexão LDAP</button>}
         </div>
       </div>
+      {current === 'entrega' && <div style={{ marginTop: 18 }}><Domains embedded /></div>}
     </>
   )
 }

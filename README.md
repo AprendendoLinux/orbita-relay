@@ -145,6 +145,8 @@ As configurações do MTA ficam em abas separadas por finalidade (e o assistente
 | **Redes e acesso** | Redes autorizadas a enviar, detecção automática, modo IP e diagnóstico de IPv6 | Sempre |
 | **Entrega e DNS** | IPs públicos de saída (SPF), seletor DKIM e política DMARC | Só no modo Relay SMTP |
 
+Em **Entrega e DNS** também ficam os domínios: cadastro, geração da chave DKIM e os registros SPF, DKIM e DMARC prontos para copiar, com verificação de DNS (a página **Domínios e DKIM** continua disponível no menu). Em **Redes e acesso**, as redes detectadas e as sugestões aparecem numa única lista recolhível, com **Adicionar todos**.
+
 As abas seguem o modo escolhido na hora, mesmo antes de salvar, e os valores das abas ocultas não são apagados.
 
 ## Servidores Mailcow

@@ -46,7 +46,7 @@ function Record({ title, host, value, check, note }: { title: string; host: stri
   )
 }
 
-export default function Domains() {
+export default function Domains({ embedded = false }: { embedded?: boolean }) {
   const dlg = useDialog()
   const [list, setList] = useState<Domain[]>([])
   const [name, setName] = useState('')
@@ -79,8 +79,8 @@ export default function Domains() {
 
   return (
     <>
-      <div className="topbar"><h1>Domínios, DKIM, SPF e DMARC</h1></div>
-      <p className="muted">Domínios de remetente autorizados no relay. Publique os registros TXT abaixo no DNS de cada domínio. A política DMARC e os IPs do SPF são ajustados em Configurações.</p>
+      {embedded ? <h3 style={{ margin: '8px 0 0' }}>Domínios, chave DKIM e registros de DNS</h3> : <div className="topbar"><h1>Domínios, DKIM, SPF e DMARC</h1></div>}
+      <p className="muted">{embedded ? 'Cadastre os domínios de remetente, gere a chave DKIM e publique os registros TXT abaixo no DNS de cada domínio. Os registros usam as configurações salvas (IPs públicos e política DMARC): salve antes de copiá-los.' : 'Domínios de remetente autorizados no relay. Publique os registros TXT abaixo no DNS de cada domínio. A política DMARC e os IPs do SPF são ajustados em Configurações.'}</p>
       {msg && <div className={`alert ${msg.t}`} role="status" style={{ margin: '12px 0' }}>{msg.s}</div>}
       <form className="glass card row" onSubmit={add} style={{ marginBottom: 16 }}>
         <input style={{ flex: 1, minWidth: 220 }} placeholder="exemplo.com.br" value={name} onChange={(e) => setName(e.target.value)} required aria-label="Domínio" />
