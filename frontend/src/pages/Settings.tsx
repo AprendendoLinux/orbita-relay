@@ -131,7 +131,7 @@ export default function Settings() {
         {current === 'geral' && vals.deploy_mode === 'client' && (
           <Tip title="Cliente">Os dados do servidor central ficam na aba “Envio para o servidor central”.</Tip>
         )}
-        {current === 'mta' && <NetDetect auto={vals.relay_nets_auto === true} version={saves} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />}
+        {current === 'mta' && <NetDetect current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={saves} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />}
         {current === 'mta' && <HostSendTip />}
         {current === 'mta' && vals.ip_mode === 'dual' && <Ipv6Panel />}
         {current === 'coleta' && (

@@ -1,3 +1,4 @@
+import ListEditor from './ListEditor'
 export type Field = {
   key: string; group: string; label: string; help?: string; type: string
   options?: string[]; value: unknown; secret?: boolean; has_value?: boolean; depends?: string; example?: string
@@ -31,6 +32,13 @@ export const visible = (f: Field, vals: Vals) => {
 }
 
 export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (x: unknown) => void }) {
+  if (f.key === 'relay_nets' || f.key === 'public_ips')
+    return (
+      <ListEditor
+        label={f.label} help={f.help} example={f.example} value={String(v ?? '')} onChange={set}
+        cidr={f.key === 'relay_nets'} placeholder={f.key === 'relay_nets' ? '192.168.0.10, 10.0.0.0/8 ou 2001:db8::/32' : '203.0.113.10 ou 2001:db8::10'}
+      />
+    )
   if (f.type === 'bool')
     return (
       <label className="check" style={{ alignSelf: 'end' }}>

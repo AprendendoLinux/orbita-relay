@@ -4,7 +4,8 @@ import { api } from '../api'
 type Item = { cidr: string; label: string; source: string }
 type Resp = { auto: boolean; items: Item[]; suggestions: Item[]; effective: string[] }
 
-export default function NetDetect({ auto, version, onAdd }: { auto: boolean; version: number; onAdd: (list: string[]) => void }) {
+export default function NetDetect({ auto, version, current, onAdd }: { auto: boolean; version: number; current: string; onAdd: (list: string[]) => void }) {
+  const inField = new Set(current.split('\n').map((l) => l.trim()).filter(Boolean))
   const [d, setD] = useState<Resp | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -23,6 +24,8 @@ export default function NetDetect({ auto, version, onAdd }: { auto: boolean; ver
     }
   }, [])
   useEffect(() => { run() }, [run, version])
+
+  const pend = (d?.suggestions ?? []).filter((i) => !inField.has(i.cidr))
 
   const add = (list: string[], msg: string) => {
     onAdd(list)
@@ -64,15 +67,22 @@ export default function NetDetect({ auto, version, onAdd }: { auto: boolean; ver
               </tbody>
             </table>
           </div>
-          <div><button type="button" className="sm" onClick={() => add(d.items.map((i) => i.cidr), 'Redes detectadas adicionadas ao campo acima')}>＋ Adicionar as redes detectadas ao campo</button></div>
+          <div>
+            {d.items.every((i) => inField.has(i.cidr))
+              ? <span className="muted small">✓ Todas as redes detectadas já estão no campo acima.</span>
+              : <button type="button" className="sm" onClick={() => add(d.items.map((i) => i.cidr), 'Redes detectadas adicionadas ao campo acima')}>＋ Adicionar as redes detectadas ao campo</button>}
+          </div>
 
-          {d.suggestions.length > 0 && (
+          {pend.length > 0 && (
             <>
-              <b style={{ marginTop: 6 }}>Outros IPs e redes encontrados <span className="muted small">(confira antes de adicionar)</span></b>
+              <div className="row spread" style={{ marginTop: 6 }}>
+                <b>Outros IPs e redes encontrados <span className="muted small">(confira antes de adicionar)</span></b>
+                <button type="button" className="sm" onClick={() => add(pend.map((i) => i.cidr), `${pend.length} item(ns) adicionado(s) ao campo acima`)}>＋ Adicionar todos ({pend.length})</button>
+              </div>
               <div className="tablewrap">
                 <table>
                   <tbody>
-                    {d.suggestions.map((i) => (
+                    {pend.map((i) => (
                       <tr key={i.cidr}>
                         <td className="mono">{i.cidr}</td>
                         <td className="wrap">{i.label}</td>

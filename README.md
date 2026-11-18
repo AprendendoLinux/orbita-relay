@@ -185,6 +185,8 @@ Em **Configurações > Servidor de e-mail**, a opção **Incluir automaticamente
 
 - Dentro do contêiner só é possível ver as interfaces dele. O IP da máquina é aprendido quando você acessa o painel por ele (ex.: `http://192.168.4.129:8080`) ou informado na variável `ORBITA_HOST_IPS` do serviço `orbitarelay-app` (separe por vírgula; aceita IP ou CIDR).
 - O campo **Redes autorizadas a enviar** já abre (em instalações novas) com as redes detectadas, e o botão **Adicionar as redes detectadas ao campo** as lista explicitamente nas instalações existentes. Há também sugestões (outras redes Docker, IP do host em cada rede e IPs do nome DNS usado no painel) e um campo para colar os IPs da máquina (`hostname -I`).
+- **Redes autorizadas a enviar** e **IPs públicos de saída** são editados como lista: cada item tem o botão **Remover** e há um campo para adicionar manualmente (aceita vários valores separados por espaço ou vírgula, com validação de IPv4/IPv6 e CIDR).
+- Nas sugestões, o botão **Adicionar todos** inclui tudo de uma vez, e os itens adicionados saem da lista de sugestões.
 - Conexões que chegam pelo gateway do Docker (IP mascarado) continuam sendo recusadas, mesmo dentro de uma rede autorizada.
 
 ## Ocultar falhas (caixa inexistente e rejeições do Rspamd)
