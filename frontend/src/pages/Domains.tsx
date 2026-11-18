@@ -36,8 +36,18 @@ function Record({ title, host, value, check, note, stale }: { title: string; hos
           </div>
         </>
       ) : <span className="muted small">Gere a chave DKIM para obter o registro.</span>}
+      {check?.ok && value && (
+        <span className="help" style={{ color: 'var(--success)' }}>
+          ✓ {title === 'DKIM' ? 'Encontrado no DNS e igual à chave gerada' : 'Registro encontrado no DNS'}
+        </span>
+      )}
       {check && !check.ok && check.detail && <span className="help">{check.detail}</span>}
-      {check?.found && check.found.length > 0 && <span className="help mono">Encontrado: {check.found.join(' | ')}</span>}
+      {check && !check.ok && check.found && check.found.length > 0 && (
+        <details className="found">
+          <summary>Ver o que foi encontrado no DNS</summary>
+          {check.found.map((f, i) => <code className="block" key={i}>{f}</code>)}
+        </details>
+      )}
     </div>
   )
 }

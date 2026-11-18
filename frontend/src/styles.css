@@ -228,3 +228,10 @@ button.danger:not(.sm):not(.ghost) { background: color-mix(in srgb, var(--danger
 .meter em { font-style: normal; font-size: 12px; color: var(--muted); min-width: 78px; text-align: right; }
 
 .copy-ico { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; margin-left: 4px; font-size: 13px; line-height: 1; border-radius: 6px; vertical-align: middle; }
+
+.rec { min-width: 0; overflow-wrap: anywhere; }
+.rec code.block, .rec .mono { overflow-wrap: anywhere; word-break: break-all; white-space: pre-wrap; }
+.grid > * { min-width: 0; }
+details.found { font-size: 12px; color: var(--muted); }
+details.found summary { cursor: pointer; margin-bottom: 6px; }
+details.found code.block { margin-bottom: 6px; }
