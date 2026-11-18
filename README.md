@@ -147,6 +147,8 @@ As configurações do MTA ficam em abas separadas por finalidade (e o assistente
 
 Em **Entrega e DNS** também ficam os domínios: cadastro, geração da chave DKIM e os registros SPF, DKIM e DMARC prontos para copiar, com verificação de DNS (a página **Domínios e DKIM** continua disponível no menu). Ao adicionar um domínio, a chave DKIM (RSA 2048) já é gerada e ativada, e o nome do registro DKIM acompanha o **seletor** configurado (padrão `dkim`). A tela explica o que cada política DMARC faz (none, quarantine, reject). Em **Redes e acesso**, as redes detectadas e as sugestões aparecem numa única lista recolhível, com **Adicionar todos**.
 
+No modo Relay SMTP o assistente tem o passo **Entrega e DNS** (seletor DKIM, IPs públicos, DMARC, domínios com a chave DKIM e os registros de DNS), que não aparece no Smarthost. A explicação das políticas DMARC é uma linha discreta, com o link "Ver todas".
+
 As abas seguem o modo escolhido na hora, mesmo antes de salvar, e os valores das abas ocultas não são apagados.
 
 ## Servidores Mailcow

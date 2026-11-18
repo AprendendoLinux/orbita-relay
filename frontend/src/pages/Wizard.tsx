@@ -11,11 +11,12 @@ import Ipv6Panel from '../components/Ipv6Panel'
 import HostSendTip from '../components/HostSendTip'
 import NetDetect from '../components/NetDetect'
 import DmarcHelp from '../components/DmarcHelp'
+import Domains from './Domains'
 import { mergeLines } from '../lib'
 
 const stepLabels: Record<string, string> = {
   nome: 'Nome', fuso: 'Fuso horário', impl: 'Implantação', central: 'Servidor central',
-  modo: 'Modo', redes: 'Redes', auth: 'Autenticação', logs: 'Logs', resumo: 'Resumo',
+  modo: 'Modo', redes: 'Redes', entrega: 'Entrega e DNS', auth: 'Autenticação', logs: 'Logs', resumo: 'Resumo',
 }
 const fallbackZones = ['America/Sao_Paulo', 'America/Manaus', 'America/Fortaleza', 'America/Bahia', 'America/Cuiaba', 'America/Rio_Branco', 'America/Noronha', 'UTC']
 
@@ -35,9 +36,10 @@ export default function Wizard({ first }: { first: boolean }) {
   const [busy, setBusy] = useState(false)
   const tzList = useMemo(zones, [])
   const deploy = String(vals.deploy_mode ?? 'standalone')
+  const mode = String(vals.relay_mode ?? 'relay')
   const steps = useMemo(
-    () => ['nome', 'fuso', 'impl', ...(deploy === 'client' ? ['central'] : []), 'modo', 'redes', 'auth', 'logs', 'resumo'],
-    [deploy],
+    () => ['nome', 'fuso', 'impl', ...(deploy === 'client' ? ['central'] : []), 'modo', 'redes', ...(mode === 'relay' ? ['entrega'] : []), 'auth', 'logs', 'resumo'],
+    [deploy, mode],
   )
   const cur = steps[step]
 
@@ -53,8 +55,23 @@ export default function Wizard({ first }: { first: boolean }) {
     return f ? <FieldInput key={key} f={f} v={vals[key]} set={(x) => setVals(applyChange(vals, key, x))} /> : null
   }
   const set = (k: string, v: unknown) => setVals({ ...vals, [k]: v })
-  const mode = String(vals.relay_mode ?? 'relay')
   const auth = String(vals.auth_mode ?? 'local')
+
+  const [domVer, setDomVer] = useState(0)
+  const saveEntrega = async () => {
+    setBusy(true)
+    setErr('')
+    try {
+      const body: Vals = {}
+      for (const k of ['dkim_selector', 'public_ips', 'dmarc_policy', 'dmarc_rua']) body[k] = vals[k]
+      await api('/api/admin/settings', { method: 'PUT', body })
+      setDomVer((n) => n + 1)
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const finish = async () => {
     setBusy(true)
@@ -65,7 +82,7 @@ export default function Wizard({ first }: { first: boolean }) {
       body.wizard_done = true
       await api('/api/admin/settings', { method: 'PUT', body })
       await refresh()
-      nav(deploy === 'server' ? '/admin/servidores' : mode === 'relay' ? '/dominios' : '/', { replace: true })
+      nav(deploy === 'server' ? '/admin/servidores' : '/', { replace: true })
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -81,6 +98,7 @@ export default function Wizard({ first }: { first: boolean }) {
     ...(deploy === 'client' ? [['Servidor central', `${vals.collect_scheme}://${vals.collect_host || '—'}:${vals.collect_port}${vals.collect_path ?? ''}`] as [string, string]] : []),
     ['Modo', mode === 'relay' ? 'Relay SMTP (entrega direta)' : `Smarthost (${vals.smarthost_host || '—'}:${vals.smarthost_port})`],
     ['Hostname do relay', String(vals.mta_hostname || '(do container)')],
+    ...(mode === 'relay' ? [['Seletor DKIM / DMARC', `${vals.dkim_selector} / ${vals.dmarc_policy}`] as [string, string]] : []),
     ['Redes autorizadas', `${String(vals.relay_nets ?? '').split('\n').filter((l) => l.trim()).length} na lista${vals.relay_nets_auto === true ? ' + detecção automática' : ''}`],
     ['Autenticação do painel', auth === 'ldap' ? `LDAP/AD (${vals.ldap_host || '—'})` : 'Local'],
     ['Retenção no banco', `${vals.db_retention_days} dias`],
@@ -189,7 +207,6 @@ export default function Wizard({ first }: { first: boolean }) {
                 </div>
                 <div className="form-grid">
                   {F('mta_hostname')}{F('max_message_mb')}
-                  {mode === 'relay' && <>{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}<DmarcHelp value={String(vals.dmarc_policy ?? 'none')} /></>}
                   {mode === 'smarthost' && <>{F('smarthost_host')}{F('smarthost_port')}{F('smarthost_tls')}{F('smarthost_user')}{F('smarthost_pass')}</>}
                 </div>
               </>
@@ -206,6 +223,23 @@ export default function Wizard({ first }: { first: boolean }) {
                 <NetDetect current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={0} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />
                 <HostSendTip />
                 {vals.ip_mode === 'dual' && <Ipv6Panel />}
+              </>
+            )}
+
+            {cur === 'entrega' && (
+              <>
+                <Tip title="Entrega direta: IPs, DKIM e DNS">
+                  No modo Relay SMTP o destinatário confere se o seu domínio autoriza este servidor. Informe os <b>IPs públicos de saída</b> (para o SPF), escolha o <b>seletor DKIM</b> e a política DMARC, cadastre os domínios (a chave DKIM é criada junto) e publique os registros TXT no DNS de cada domínio.
+                </Tip>
+                <div className="form-grid">
+                  {F('dkim_selector')}{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}
+                  <DmarcHelp value={String(vals.dmarc_policy ?? 'none')} />
+                </div>
+                <div className="row">
+                  <button type="button" onClick={saveEntrega} disabled={busy}>{busy ? 'Salvando…' : '↻ Salvar e atualizar os registros'}</button>
+                  <span className="help">Os registros abaixo usam as configurações salvas.</span>
+                </div>
+                <Domains embedded selector={String(vals.dkim_selector ?? '')} version={domVer} />
               </>
             )}
 
@@ -245,7 +279,7 @@ export default function Wizard({ first }: { first: boolean }) {
                   {summary.map(([k, v]) => (<><dt key={k}>{k}</dt><dd key={k + 'v'}>{v}</dd></>))}
                 </dl>
                 {deploy === 'server' && <div className="alert warn">Próximo passo: cadastrar os relays remotos em Servidores e copiar o token de cada um.</div>}
-                {mode === 'relay' && deploy !== 'server' && <div className="alert warn">Próximo passo: cadastrar seus domínios e gerar o DKIM. Os registros SPF e DMARC recomendados serão exibidos lá.</div>}
+                {mode === 'relay' && deploy !== 'server' && <div className="alert info small">Domínios, chave DKIM e registros de DNS: cadastrados no passo <b>Entrega e DNS</b>. Depois, gerencie-os no menu <b>Domínios e DKIM</b>.</div>}
                 <span className="help">{label('wizard_done')}: ao concluir, as configurações são salvas e aplicadas ao relay.</span>
               </>
             )}

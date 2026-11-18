@@ -1,20 +1,18 @@
-const opts: { id: string; nome: string; txt: string }[] = [
-  { id: 'none', nome: 'Nenhuma (none)', txt: 'Só monitora. Mensagens que falham em SPF e DKIM continuam sendo entregues normalmente e você passa a receber relatórios. É a opção certa para começar.' },
-  { id: 'quarantine', nome: 'Quarentena (quarantine)', txt: 'Pede ao destinatário que trate as mensagens que falham como suspeitas, normalmente enviando-as para a pasta de spam.' },
-  { id: 'reject', nome: 'Rejeitar (reject)', txt: 'Pede ao destinatário que recuse as mensagens que falham. É a opção mais rígida: use só depois de confirmar que SPF e DKIM estão corretos.' },
+const opts: { id: string; nome: string; curto: string; txt: string }[] = [
+  { id: 'none', nome: 'Nenhuma (none)', curto: 'só monitora e gera relatórios, sem afetar a entrega (ideal para começar)', txt: 'só monitora; as mensagens que falham continuam sendo entregues.' },
+  { id: 'quarantine', nome: 'Quarentena (quarantine)', curto: 'mensagens que falham vão para o spam', txt: 'pede ao destinatário que trate as que falham como suspeitas (spam).' },
+  { id: 'reject', nome: 'Rejeitar (reject)', curto: 'mensagens que falham são recusadas (o mais rígido)', txt: 'pede ao destinatário que recuse as que falham; use só com SPF e DKIM confirmados.' },
 ]
 
 export default function DmarcHelp({ value }: { value: string }) {
+  const cur = opts.find((o) => o.id === value) ?? opts[0]
   return (
-    <div className="glass card stack optdoc" style={{ background: 'transparent', gap: 8 }}>
-      <b>O que cada política DMARC faz</b>
-      {opts.map((o) => (
-        <div key={o.id} className={`opt-row ${value === o.id ? 'on' : ''}`}>
-          <b>{o.nome}</b>
-          <span>{o.txt}</span>
-        </div>
-      ))}
-      <span className="help">O e-mail de relatórios (rua) recebe resumos diários de quem enviou em nome do seu domínio e do que passou ou falhou.</span>
-    </div>
+    <details className="dmarc-help">
+      <summary><b>{cur.nome.split(' (')[0]}:</b> {cur.curto}. <span className="more">Ver todas</span></summary>
+      <ul>
+        {opts.map((o) => <li key={o.id} className={o.id === cur.id ? 'on' : ''}><b>{o.nome}</b>: {o.txt}</li>)}
+        <li>O e-mail de relatórios (rua) recebe resumos de quem enviou em nome do seu domínio.</li>
+      </ul>
+    </details>
   )
 }

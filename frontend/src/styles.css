@@ -209,7 +209,10 @@ button.danger:not(.sm):not(.ghost) { background: color-mix(in srgb, var(--danger
 
 .alert.info { color: var(--secondary); border-color: var(--secondary); background: color-mix(in srgb, var(--secondary) 8%, transparent); }
 
-.optdoc { font-size: 12.5px; }
-.optdoc .opt-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; color: var(--muted); }
-.optdoc .opt-row b { color: var(--text); }
-.optdoc .opt-row.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.dmarc-help { font-size: 12px; color: var(--muted); line-height: 1.5; align-self: start; }
+.dmarc-help summary { cursor: pointer; list-style: none; }
+.dmarc-help summary::-webkit-details-marker { display: none; }
+.dmarc-help .more { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.dmarc-help ul { margin: 6px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
+.dmarc-help li.on { color: var(--text); }
+.dmarc-help b { color: var(--text); font-weight: 600; }
