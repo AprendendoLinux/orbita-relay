@@ -22,7 +22,7 @@ async function copyText(t: string) {
   }
 }
 
-function Record({ title, host, value, check, note }: { title: string; host: string; value?: string; check?: Check; note?: string }) {
+function Record({ title, host, value, check, note, stale }: { title: string; host: string; value?: string; check?: Check; note?: string; stale?: boolean }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="rec">
@@ -33,6 +33,7 @@ function Record({ title, host, value, check, note }: { title: string; host: stri
       {value ? (
         <>
           <div className="small muted">TXT em <span className="mono">{host}</span></div>
+          {stale && <span className="help" style={{ color: 'var(--warning)' }}>O seletor foi alterado e ainda não foi salvo: clique em Salvar acima para aplicá-lo ao relay.</span>}
           <code className="block">{value}</code>
           <div className="row">
             <button className="sm" onClick={async () => { await copyText(value); setCopied(true); setTimeout(() => setCopied(false), 1500) }}>{copied ? 'Copiado ✓' : 'Copiar valor'}</button>
@@ -46,7 +47,7 @@ function Record({ title, host, value, check, note }: { title: string; host: stri
   )
 }
 
-export default function Domains({ embedded = false }: { embedded?: boolean }) {
+export default function Domains({ embedded = false, selector, version = 0 }: { embedded?: boolean; selector?: string; version?: number }) {
   const dlg = useDialog()
   const [list, setList] = useState<Domain[]>([])
   const [name, setName] = useState('')
@@ -54,7 +55,7 @@ export default function Domains({ embedded = false }: { embedded?: boolean }) {
   const [checks, setChecks] = useState<Record<number, Checks>>({})
 
   const load = useCallback(() => api<Domain[]>('/api/admin/domains').then(setList), [])
-  useEffect(() => { load().catch((e) => setMsg({ t: 'err', s: e.message })) }, [load])
+  useEffect(() => { load().catch((e) => setMsg({ t: 'err', s: e.message })) }, [load, version])
 
   const act = async (fn: () => Promise<unknown>, ok = 'Concluído') => {
     try {
@@ -66,9 +67,11 @@ export default function Domains({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  const dkimHost = (d: Domain) => (selector ? `${selector}._domainkey.${d.domain}` : d.dkim_host ?? '')
+
   const add = (e: FormEvent) => {
     e.preventDefault()
-    act(async () => { await api('/api/admin/domains', { method: 'POST', body: { domain: name } }); setName('') }, 'Domínio adicionado')
+    act(async () => { await api('/api/admin/domains', { method: 'POST', body: { domain: name } }); setName('') }, 'Domínio adicionado com a chave DKIM já gerada')
   }
 
   const check = async (id: number) => {
@@ -111,7 +114,7 @@ export default function Domains({ embedded = false }: { embedded?: boolean }) {
               </div>
               <div className="grid cols-2">
                 <Record title="SPF" host={d.domain} value={d.spf_record} check={c?.spf} note="Se já existir um SPF, mescle os mecanismos em um único registro." />
-                <Record title="DKIM" host={d.dkim_host ?? ''} value={d.dkim_record} check={c?.dkim} />
+                <Record title="DKIM" host={dkimHost(d)} stale={selector !== undefined && selector !== '' && !!d.dkim_host && !d.dkim_host.startsWith(selector + '.')} value={d.dkim_record} check={c?.dkim} />
                 <Record title="DMARC" host={d.dmarc_host} value={d.dmarc_record} check={c?.dmarc} note="Comece com p=none e endureça após monitorar os relatórios." />
               </div>
             </div>

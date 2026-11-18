@@ -11,6 +11,7 @@ const optionLabels: Record<string, string> = {
   none: 'Nenhuma', starttls: 'STARTTLS', tls: 'TLS implícito (SMTPS)', ldaps: 'LDAPS',
   standalone: 'Standalone (instalação única)', server: 'Servidor central (recebe de outros relays)', client: 'Cliente (envia a um servidor central)',
   dark: 'Escuro', light: 'Claro',
+  'dmarc_policy:none': 'Nenhuma (apenas monitorar)', 'dmarc_policy:quarantine': 'Quarentena (quarantine)', 'dmarc_policy:reject': 'Rejeitar (reject)',
   https: 'HTTPS (recomendado)', http: 'HTTP (sem criptografia)',
   dual: 'IPv4 + IPv6', ipv4: 'Somente IPv4', quarantine: 'quarantine', reject: 'reject',
 }
@@ -50,7 +51,7 @@ export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (
       {f.label}
       {f.type === 'select' ? (
         <select value={String(v)} onChange={(e) => set(e.target.value)}>
-          {f.options?.map((o) => <option key={o} value={o}>{optionLabels[o] ?? o}</option>)}
+          {f.options?.map((o) => <option key={o} value={o}>{optionLabels[`${f.key}:${o}`] ?? optionLabels[o] ?? o}</option>)}
         </select>
       ) : f.type === 'textarea' ? (
         <textarea rows={Math.min(14, Math.max(5, String(v ?? '').split('\n').length + 1))} value={String(v ?? '')} onChange={(e) => set(e.target.value)} />

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"net"
 	"net/http"
 	"net/netip"
@@ -65,8 +66,15 @@ func (a *App) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "domínio inválido")
 		return
 	}
-	if _, err := a.exec(r.Context(), `INSERT INTO domains(domain) VALUES(?)`, d); err != nil {
+	res, err := a.exec(r.Context(), `INSERT INTO domains(domain) VALUES(?)`, d)
+	if err != nil {
 		writeErr(w, 409, "domínio já cadastrado")
+		return
+	}
+	id, _ := res.LastInsertId()
+	if err := a.makeDKIM(r.Context(), id); err != nil {
+		_, _ = a.exec(r.Context(), `DELETE FROM domains WHERE id=?`, id)
+		writeErr(w, 500, err.Error())
 		return
 	}
 	a.audit(r.Context(), userFrom(r).Username, "domain.create", d)
@@ -86,25 +94,31 @@ func (a *App) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
-func (a *App) handleGenerateDKIM(w http.ResponseWriter, r *http.Request) {
+func (a *App) makeDKIM(ctx context.Context, id any) error {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		writeErr(w, 500, "falha ao gerar chave")
-		return
+		return errors.New("falha ao gerar chave")
 	}
 	priv := string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))
 	pubDER, _ := x509.MarshalPKIXPublicKey(&key.PublicKey)
 	enc, err := a.encrypt(priv)
 	if err != nil {
-		writeErr(w, 500, "falha ao criptografar chave")
+		return errors.New("falha ao criptografar chave")
+	}
+	_, err = a.exec(ctx, `UPDATE domains SET dkim_private=?, dkim_public=?, dkim_enabled=1 WHERE id=?`,
+		enc, base64.StdEncoding.EncodeToString(pubDER), id)
+	return err
+}
+
+func (a *App) handleGenerateDKIM(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var d string
+	if err := a.row(r.Context(), `SELECT domain FROM domains WHERE id=?`, id).Scan(&d); err != nil {
+		writeErr(w, 404, "domínio não encontrado")
 		return
 	}
-	var d string
-	id := r.PathValue("id")
-	_, _ = a.exec(r.Context(), `UPDATE domains SET dkim_private=?, dkim_public=?, dkim_enabled=1 WHERE id=?`,
-		enc, base64.StdEncoding.EncodeToString(pubDER), id)
-	if err = a.row(r.Context(), `SELECT domain FROM domains WHERE id=?`, id).Scan(&d); err != nil {
-		writeErr(w, 404, "domínio não encontrado")
+	if err := a.makeDKIM(r.Context(), id); err != nil {
+		writeErr(w, 500, err.Error())
 		return
 	}
 	a.audit(r.Context(), userFrom(r).Username, "dkim.generate", d)

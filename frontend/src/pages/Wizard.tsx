@@ -10,6 +10,7 @@ import Tip from '../components/Tip'
 import Ipv6Panel from '../components/Ipv6Panel'
 import HostSendTip from '../components/HostSendTip'
 import NetDetect from '../components/NetDetect'
+import DmarcHelp from '../components/DmarcHelp'
 import { mergeLines } from '../lib'
 
 const stepLabels: Record<string, string> = {
@@ -188,7 +189,7 @@ export default function Wizard({ first }: { first: boolean }) {
                 </div>
                 <div className="form-grid">
                   {F('mta_hostname')}{F('max_message_mb')}
-                  {mode === 'relay' && <>{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}</>}
+                  {mode === 'relay' && <>{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}<DmarcHelp value={String(vals.dmarc_policy ?? 'none')} /></>}
                   {mode === 'smarthost' && <>{F('smarthost_host')}{F('smarthost_port')}{F('smarthost_tls')}{F('smarthost_user')}{F('smarthost_pass')}</>}
                 </div>
               </>

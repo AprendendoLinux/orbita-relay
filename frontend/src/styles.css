@@ -208,3 +208,8 @@ button.danger:not(.sm):not(.ghost) { background: color-mix(in srgb, var(--danger
 .listed .item:nth-child(odd) { background: color-mix(in srgb, var(--text) 4%, transparent); }
 
 .alert.info { color: var(--secondary); border-color: var(--secondary); background: color-mix(in srgb, var(--secondary) 8%, transparent); }
+
+.optdoc { font-size: 12.5px; }
+.optdoc .opt-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; color: var(--muted); }
+.optdoc .opt-row b { color: var(--text); }
+.optdoc .opt-row.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }

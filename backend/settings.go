@@ -66,7 +66,7 @@ var settingFields = []Field{
 	{Key: "enforce_sender_domains", Group: "mta", Label: "Restringir remetentes aos domínios cadastrados", Type: "bool", Default: true, Depends: "relay_mode=relay"},
 	{Key: "ip_mode", Group: "redes", Label: "Modo IP", Type: "select", Default: "dual", Options: []string{"dual", "ipv4"}, Help: "dual = IPv4 + IPv6"},
 	{Key: "max_message_mb", Group: "mta", Label: "Tamanho máximo da mensagem (MB)", Type: "number", Default: 25},
-	{Key: "dkim_selector", Group: "entrega", Label: "Seletor DKIM", Type: "text", Default: "orbita", Depends: "relay_mode=relay"},
+	{Key: "dkim_selector", Group: "entrega", Label: "Seletor DKIM", Type: "text", Default: "dkim", Depends: "relay_mode=relay"},
 	{Key: "public_ips", Group: "entrega", Label: "IPs públicos de saída (IPv4/IPv6)", Type: "textarea", Default: "", Depends: "relay_mode=relay", Help: "IPs (IPv4/IPv6) pelos quais o relay envia. Usados para montar o registro SPF"},
 	{Key: "dmarc_policy", Group: "entrega", Label: "Política DMARC", Type: "select", Default: "none", Options: []string{"none", "quarantine", "reject"}, Depends: "relay_mode=relay"},
 	{Key: "dmarc_rua", Group: "entrega", Label: "E-mail para relatórios DMARC (rua)", Type: "text", Default: "", Depends: "relay_mode=relay"},
@@ -113,7 +113,7 @@ var (
 
 var fieldExamples = map[string]string{
 	"app_name": "Relay SMTP da Empresa", "timezone": "America/Sao_Paulo", "mta_hostname": "relay.dominio.local",
-	"relay_nets": "10.0.0.0/8, 192.168.1.0/24, 2001:db8::/32", "max_message_mb": "25", "dkim_selector": "orbita",
+	"relay_nets": "10.0.0.0/8, 192.168.1.0/24, 2001:db8::/32", "max_message_mb": "25", "dkim_selector": "dkim",
 	"public_ips": "203.0.113.10 e 2001:db8::10", "dmarc_policy": "none (monitorar) ou quarantine", "dmarc_rua": "dmarc@dominio.local",
 	"smarthost_host": "smtp.dominio.local", "smarthost_port": "587", "smarthost_user": "usuario@dominio.local", "smarthost_pass": "••••••••", "public_url": "https://relay.dominio.local", "smtp_host": "smtp.dominio.local", "smtp_port": "587", "smtp_from": "orbita@dominio.local",
 	"ldap_host": "ad.dominio.local ou 192.168.0.10", "ldap_port": "389 (LDAP) ou 636 (LDAPS)", "ldap_domain": "@dominio.local",

@@ -9,6 +9,7 @@ import Ipv6Panel from '../components/Ipv6Panel'
 import HostSendTip from '../components/HostSendTip'
 import NetDetect from '../components/NetDetect'
 import Domains from './Domains'
+import DmarcHelp from '../components/DmarcHelp'
 import { mergeLines } from '../lib'
 import { clearPersonalMode } from '../components/ThemeToggle'
 
@@ -125,6 +126,7 @@ export default function Settings() {
           {fields.map((f) => (
             <FieldInput key={f.key} f={f} v={vals[f.key]} set={(x) => setVals(applyChange(vals, f.key, x))} />
           ))}
+          {current === 'entrega' && <DmarcHelp value={String(vals.dmarc_policy ?? 'none')} />}
         </div>
         {current === 'geral' && vals.deploy_mode === 'server' && (
           <Tip title="Servidor central">Cadastre cada relay remoto em <Link to="/admin/servidores">Servidores</Link> para gerar o token dele. Se este sistema estiver atrás de um proxy com HTTPS, ative “Estou atrás de um proxy reverso”.</Tip>
@@ -164,7 +166,7 @@ export default function Settings() {
           {current === 'ldap' && vals.auth_mode === 'ldap' && <button onClick={testLdap}>Testar conexão LDAP</button>}
         </div>
       </div>
-      {current === 'entrega' && <div style={{ marginTop: 18 }}><Domains embedded /></div>}
+      {current === 'entrega' && <div style={{ marginTop: 18 }}><Domains embedded selector={String(vals.dkim_selector ?? '')} version={saves} /></div>}
     </>
   )
 }
