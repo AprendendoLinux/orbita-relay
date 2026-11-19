@@ -28,6 +28,7 @@ O **OrbitaRelay** combina um servidor de e-mail de saída (**Exim**) com um pain
 - [Atualizando](#atualizando)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Roadmap](#roadmap)
+- [Licença](#licença)
 - [Licenças de terceiros](#licenças-de-terceiros)
 
 ## Principais recursos
@@ -216,6 +217,10 @@ docs/       Documentação e imagens
 - Alertas (Telegram, webhook, e-mail), monitor de blacklists e métricas Prometheus
 - Leitor de relatórios DMARC e limite de envio por remetente
 - Envio das mensagens de um Mailcow do cliente para o servidor central
+
+## Licença
+
+O OrbitaRelay é distribuído sob a [licença MIT](LICENSE).
 
 ## Licenças de terceiros
 
