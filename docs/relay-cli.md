@@ -4,31 +4,53 @@ O **OrbitaRelay CLI** é um relay SMTP (Exim) **sem painel e sem banco de dados*
 
 Imagem: `ghcr.io/aprendendolinux/orbita-relay-cli` (amd64 e arm64).
 
-## Exemplo mínimo
+## Os três arquivos docker-compose
 
-```yaml
-services:
-  orbitarelay-cli:
-    image: ghcr.io/aprendendolinux/orbita-relay-cli:1.6.1
-    container_name: orbitarelay-cli
-    restart: unless-stopped
-    ports: ["25:25", "587:587"]
-    environment:
-      ORBITA_HOSTNAME: relay.exemplo.com.br
-      ORBITA_DOMAINS: exemplo.com.br
-      ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
-      ORBITA_PUBLIC_IPS: 203.0.113.10
-    volumes:
-      - cli-data:/data
-      - cli-spool:/var/spool/exim4
-volumes:
-  cli-data:
-  cli-spool:
+O projeto traz **três** arquivos compose na raiz do repositório. Escolha **um**:
+
+| Arquivo | Para que serve |
+|---|---|
+| [`docker-compose.yml`](../docker-compose.yml) | **Painel completo** (app, MySQL, MTA e proxy): interface web, relatórios, usuários, DNS. Veja [Instalação](instalacao.md). |
+| [`docker-compose.cli-relay.yml`](../docker-compose.cli-relay.yml) | **CLI em modo relay**: entrega direto aos servidores de destino e assina com **DKIM próprio**. Você publica SPF, DKIM e DMARC. |
+| [`docker-compose.cli-smarthost.yml`](../docker-compose.cli-smarthost.yml) | **CLI em modo smarthost**: entrega por outro servidor SMTP (Gmail, Office 365, provedor). O DKIM e o SPF ficam com o provedor. |
+
+Os dois arquivos CLI são **comentados linha a linha**: abra, ajuste os valores e suba.
+
+```bash
+# modo relay
+curl -O https://raw.githubusercontent.com/AprendendoLinux/orbita-relay/main/docker-compose.cli-relay.yml
+docker compose -f docker-compose.cli-relay.yml up -d
+
+# ou modo smarthost
+curl -O https://raw.githubusercontent.com/AprendendoLinux/orbita-relay/main/docker-compose.cli-smarthost.yml
+docker compose -f docker-compose.cli-smarthost.yml up -d
 ```
 
-O arquivo [`docker-compose.cli.yml`](../docker-compose.cli.yml) traz um modelo completo.
+**Qual escolher?** Se o servidor tem IP público com DNS reverso e porta 25 de saída liberada, use o **relay**. Se a rede bloqueia a porta 25 ou você já tem um provedor de envio, use o **smarthost**. Os dois podem enviar os eventos a um servidor central.
 
-> Mantenha o volume **`/data`**: ele guarda as chaves DKIM e o cursor de envio. Sem ele, as chaves mudam a cada recriação e o DNS fica errado (o contêiner avisa no log).
+### Mínimo no modo relay
+
+```yaml
+environment:
+  ORBITA_HOSTNAME: relay.exemplo.com.br
+  ORBITA_DOMAINS: exemplo.com.br
+  ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
+  ORBITA_PUBLIC_IPS: 203.0.113.10
+```
+
+### Mínimo no modo smarthost
+
+```yaml
+environment:
+  ORBITA_MODE: smarthost
+  ORBITA_HOSTNAME: relay.exemplo.com.br
+  ORBITA_SMARTHOST_HOST: smtp-relay.gmail.com
+  ORBITA_SMARTHOST_USER: usuario@exemplo.com.br
+  ORBITA_SMARTHOST_PASS: senha
+  ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
+```
+
+> Mantenha o volume **`/data`**: ele guarda as chaves DKIM (modo relay), o certificado TLS e o cursor de envio. Sem ele, as chaves mudam a cada recriação e o DNS fica errado (o contêiner avisa no log).
 
 ## Variáveis
 

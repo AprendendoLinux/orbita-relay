@@ -1,0 +1,108 @@
+# OrbitaRelay CLI, modo SMARTHOST: entrega por outro servidor SMTP (Gmail, Office 365, provedor...).
+# Relay SMTP leve (Exim), sem painel e sem banco de dados.
+# Neste modo o DKIM e o SPF ficam por conta do provedor do smarthost: não há chave DKIM aqui.
+# Para entrega direta com DKIM próprio, use docker-compose.cli-relay.yml.
+#
+# Toda a configuração fica neste arquivo. Para mudar algo: edite e rode
+#   docker compose -f docker-compose.cli-smarthost.yml up -d
+#
+# Guia rápido
+#   1. Preencha ORBITA_HOSTNAME e os dados do smarthost (ORBITA_SMARTHOST_*).
+#   2. Suba:            docker compose -f docker-compose.cli-smarthost.yml up -d
+#   3. Teste:           docker exec orbitarelay-cli orbita test-mail voce@gmail.com
+#   4. Acompanhe:       docker logs -f orbitarelay-cli
+#
+# Comandos úteis (docker exec orbitarelay-cli orbita ...)
+#   status      SMTP, fila e conexão com o servidor central
+#   config      configuração efetiva (config --exim mostra o exim.conf, sem senhas)
+#   queue       fila de mensagens
+#   test-mail   test-mail destino@exemplo.com [remetente]
+#
+# Valores inválidos fazem o contêiner parar na subida, com a mensagem do erro em "docker logs".
+
+name: orbitarelay-cli
+
+services:
+  orbitarelay-cli:
+    image: ghcr.io/aprendendolinux/orbita-relay-cli:1.6.1
+    container_name: orbitarelay-cli
+    hostname: relay-filial
+    restart: unless-stopped
+
+    # Portas SMTP publicadas. Quem envia deve usar o IP da máquina (ou o nome DNS dela),
+    # nunca localhost/127.0.0.1: pelo localhost o Docker mascara a origem e o relay recusa
+    # a conexão de propósito (550 Connection through Docker gateway refused).
+    ports:
+      - "25:25"
+      - "587:587"
+
+    environment:
+      TZ: America/Sao_Paulo
+
+      # ---------------------------------------------------------------- Básico
+      # Modo de entrega: este arquivo é o modo smarthost.
+      ORBITA_MODE: smarthost
+
+      # OBRIGATÓRIA. Nome DNS do relay: vai no EHLO (alguns provedores, como o
+      # smtp-relay.gmail.com, derrubam a conexão se o EHLO for "localhost") e no certificado TLS.
+      ORBITA_HOSTNAME: relay.exemplo.com.br
+
+      # dual (IPv4 + IPv6, padrão) ou ipv4 (só IPv4).
+      # ORBITA_IP_MODE: dual
+
+      # Tamanho máximo da mensagem, em MB (padrão 25).
+      # ORBITA_MAX_MESSAGE_MB: 25
+
+      # ------------------------------------------------- Quem pode enviar (redes)
+      # IPs ou redes CIDR autorizados a enviar, separados por vírgula.
+      # Padrão: 10.0.0.0/8,192.168.0.0/16,fd00::/8
+      # Cuidado: tudo o que estiver aqui pode mandar e-mail por este relay.
+      ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
+
+      # true (padrão): soma o loopback e a rede Docker do próprio contêiner à lista acima.
+      # ORBITA_RELAY_NETS_AUTO: "true"
+
+      # IPs da máquina hospedeira a autorizar também (opcional).
+      # ORBITA_HOST_IPS: 192.168.0.10
+
+      # ------------------------------------------------------------- Smarthost
+      # OBRIGATÓRIO: servidor pelo qual as mensagens serão entregues.
+      ORBITA_SMARTHOST_HOST: smtp-relay.gmail.com
+      # Porta (padrão 587).
+      ORBITA_SMARTHOST_PORT: 587
+      # Criptografia: starttls (padrão, porta 587), tls (conexão segura direta, porta 465) ou none.
+      ORBITA_SMARTHOST_TLS: starttls
+      # Autenticação: informe usuário e senha juntos, ou nenhum dos dois.
+      ORBITA_SMARTHOST_USER: usuario@exemplo.com.br
+      ORBITA_SMARTHOST_PASS: senha
+      # A senha fica em texto neste arquivo: proteja-o (chmod 600) e não o publique.
+      # No smarthost do Google (smtp-relay.gmail.com), o IP público do relay (ou o usuário)
+      # precisa estar autorizado em Apps > Gmail > Roteamento > Serviço de relay de SMTP,
+      # e o remetente deve ser de um domínio da conta.
+
+      # ------------------------------------------------- Servidor central (opcional)
+      # Envia os eventos do log deste relay ao painel OrbitaRelay central, que unifica
+      # os relatórios. Sem a URL, o relay funciona sozinho.
+      # No central: Relays remotos > adicionar servidor > copie o token (aparece uma vez).
+      # ORBITA_CENTRAL_URL: https://orbita.exemplo.com.br
+      # ORBITA_CENTRAL_TOKEN: orb_...        # obrigatório quando a URL é informada
+      # ORBITA_CENTRAL_SKIP_VERIFY: "false"  # true só para certificado autoassinado
+      # ORBITA_CENTRAL_INTERVAL: 10          # intervalo de envio, em segundos
+      # Se o central ficar fora do ar, o envio retoma de onde parou, sem perda e sem duplicar.
+
+      # ------------------------------------------------------------------ Logs
+      # O log do Exim aparece em "docker logs -f orbitarelay-cli" (linhas [reject] e
+      # [panic] marcadas; [cli] são os eventos do próprio contêiner). Os arquivos ficam
+      # em /var/log/exim dentro do contêiner, com rotação:
+      # ORBITA_LOG_ROTATE_MB: 50   # roda ao passar deste tamanho (MB)
+      # ORBITA_LOG_KEEP: 7         # arquivos antigos mantidos
+
+    volumes:
+      # /data guarda o certificado TLS e o cursor de envio ao central.
+      - cli-data:/data
+      # Fila de mensagens ainda não entregues; preserva a fila ao recriar o contêiner.
+      - cli-spool:/var/spool/exim4
+
+volumes:
+  cli-data:
+  cli-spool:

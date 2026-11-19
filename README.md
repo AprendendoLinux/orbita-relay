@@ -64,6 +64,18 @@ flowchart LR
 - **`orbitarelay-db`**: o MySQL, com mensagens, usuários e configurações.
 - **`orbitarelay-proxy`** (opcional): um proxy somente leitura da API do Docker, usado só para diagnosticar o IPv6.
 
+## Qual docker-compose usar
+
+O repositório traz **três** arquivos compose. Escolha um:
+
+| Arquivo | Quando usar |
+|---|---|
+| `docker-compose.yml` | **Painel completo**: interface web, relatórios, usuários e DNS (app, MySQL, MTA). |
+| `docker-compose.cli-relay.yml` | **Relay leve** sem painel e sem banco, com entrega direta e DKIM próprio. |
+| `docker-compose.cli-smarthost.yml` | **Relay leve** sem painel e sem banco, entregando por um smarthost (Gmail, Office 365...). |
+
+Os dois relays leves estão em [Relay CLI](docs/relay-cli.md); o painel, abaixo.
+
 ## Começando em 5 minutos
 
 **1.** Salve o `docker-compose.yml` do repositório (ele usa só imagens públicas) e suba:
@@ -174,13 +186,13 @@ Códigos de verificação, recuperação de senha e avisos usam um modelo HTML c
 | **[Mensagens e relatórios](docs/relatorios.md)** | Painel, filtros, PDF, CSV e ocultar falhas. |
 | **[Mailcow](docs/mailcow.md)** | Registrar as mensagens de servidores Mailcow. |
 | **[Vários servidores](docs/multi-servidor.md)** | Servidor central e clientes. |
-| **[Relay CLI](docs/relay-cli.md)** | Relay leve, sem painel e sem banco, configurado só pelo `docker-compose.yml`. |
+| **[Relay CLI](docs/relay-cli.md)** | Relay leve, sem painel e sem banco, em dois compose prontos: `docker-compose.cli-relay.yml` e `docker-compose.cli-smarthost.yml`. |
 | **[Docker, rede e IPv6](docs/docker-rede-ipv6.md)** | Por que usar o IP da máquina, redes autorizadas e IPv6 no Docker. |
 | **[Solução de problemas](docs/solucao-de-problemas.md)** | Logs do Exim, DKIM, DNS, Gmail e permissões. |
 
 ## Atualizando
 
-As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app` e `ghcr.io/aprendendolinux/orbita-relay-mta` (uma tag por versão e `latest`). Para atualizar, troque a tag no `docker-compose.yml` (ou use `latest`) e rode:
+As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app` e `ghcr.io/aprendendolinux/orbita-relay-mta` (e `orbita-relay-cli` para o relay leve; uma tag por versão e `latest`). Para atualizar, troque a tag no `docker-compose.yml` (ou use `latest`) e rode:
 
 ```bash
 docker compose pull && docker compose up -d

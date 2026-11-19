@@ -1,10 +1,12 @@
-# OrbitaRelay CLI: relay SMTP leve (Exim), sem painel e sem banco de dados.
+# OrbitaRelay CLI, modo RELAY: entrega direto aos servidores de destino (MX) e assina com DKIM.
+# Relay SMTP leve (Exim), sem painel e sem banco de dados.
+# Para entregar por outro servidor SMTP (Gmail, Office 365...), use docker-compose.cli-smarthost.yml.
 # Toda a configuração fica neste arquivo. Para mudar algo: edite e rode
-#   docker compose -f docker-compose.cli.yml up -d
+#   docker compose -f docker-compose.cli-relay.yml up -d
 #
 # Guia rápido
 #   1. Preencha ORBITA_HOSTNAME e ORBITA_DOMAINS (e as redes autorizadas).
-#   2. Suba:            docker compose -f docker-compose.cli.yml up -d
+#   2. Suba:            docker compose -f docker-compose.cli-relay.yml up -d
 #   3. Veja o DNS:      docker exec orbitarelay-cli orbita dns
 #   4. Publique SPF, DKIM e DMARC no DNS de cada domínio (veja "DNS" abaixo).
 #   5. Teste:           docker exec orbitarelay-cli orbita test-mail voce@gmail.com
@@ -39,10 +41,7 @@ services:
       TZ: America/Sao_Paulo
 
       # ---------------------------------------------------------------- Básico
-      # Modo de entrega:
-      #   relay     entrega direto aos servidores de destino (MX) e assina com DKIM.
-      #   smarthost entrega por outro servidor SMTP (veja "Smarthost" abaixo); o DKIM e o
-      #             SPF ficam por conta do provedor.
+      # Modo de entrega: este arquivo é o modo relay (entrega direta e DKIM próprio).
       ORBITA_MODE: relay
 
       # OBRIGATÓRIA. Nome DNS do relay: vai no EHLO e no certificado TLS.
@@ -102,18 +101,6 @@ services:
       # Política e e-mail de relatórios do DMARC. Mudam só o texto mostrado: o DMARC em si vive no DNS.
       # ORBITA_DMARC_POLICY: none        # none, quarantine ou reject
       # ORBITA_DMARC_RUA: dmarc@exemplo.com.br
-
-      # ------------------------------------------------------------- Smarthost
-      # Para entregar por outro servidor (por exemplo smtp-relay.gmail.com),
-      # troque ORBITA_MODE para smarthost e descomente:
-      # ORBITA_SMARTHOST_HOST: smtp-relay.gmail.com
-      # ORBITA_SMARTHOST_PORT: 587          # padrão 587
-      # ORBITA_SMARTHOST_TLS: starttls      # starttls (padrão), tls (porta 465) ou none
-      # ORBITA_SMARTHOST_USER: usuario@exemplo.com.br
-      # ORBITA_SMARTHOST_PASS: senha        # informe usuário e senha juntos (ou nenhum)
-      # Fica em texto neste arquivo: proteja-o (chmod 600) e não o publique.
-      # No smarthost do Google, o IP público do relay (ou o usuário) precisa estar
-      # autorizado no Workspace e o remetente deve ser de um domínio da conta.
 
       # ------------------------------------------------- Servidor central (opcional)
       # Envia os eventos do log deste relay ao painel OrbitaRelay central, que unifica

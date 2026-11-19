@@ -1,6 +1,6 @@
 # Instalação
 
-Este guia mostra como instalar o OrbitaRelay com Docker Compose, com pastas mapeadas ou pelo Portainer, e como atualizar e fazer backup.
+Este guia mostra como instalar o OrbitaRelay com Docker Compose, com pastas mapeadas ou pelo Portainer, e como atualizar e fazer backup. Para o relay leve, sem painel e sem banco, veja [Relay CLI](relay-cli.md).
 
 ## Requisitos
 
