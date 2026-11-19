@@ -10,9 +10,10 @@ export function Footer() {
   const { branding } = useBranding()
   return (
     <footer className="footer">
-      <b>{branding?.app_name ?? 'OrbitaRelay'}</b> · Relay SMTP e relatórios
-      <span className="ver">v{__APP_VERSION__}</span>
-      <span className="by">Desenvolvido por <a href="https://henrique.tec.br" target="_blank" rel="noopener noreferrer">Henrique Fagundes</a></span>
+      <div className="line">
+        <b>{branding?.app_name ?? 'OrbitaRelay'} v{__APP_VERSION__}</b> - Relay SMTP e relatórios - Desenvolvido por{' '}
+        <a href="https://henrique.tec.br" target="_blank" rel="noopener noreferrer">Henrique Fagundes</a>
+      </div>
     </footer>
   )
 }

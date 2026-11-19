@@ -73,7 +73,7 @@ export default function ResetPassword() {
           ) : <p className="muted" style={{ textAlign: 'center' }}>Verificando o link…</p>}
         </div>
       </div>
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0 }}><Footer /></div>
+      <div className="footer-fixed"><Footer /></div>
     </>
   )
 }

@@ -103,7 +103,7 @@ export default function Login() {
             </div>
           </form>
         </div>
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0 }}><Footer /></div>
+        <div className="footer-fixed"><Footer /></div>
       </>
     )
   }
@@ -129,7 +129,7 @@ export default function Login() {
           </div>
         </form>
       </div>
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0 }}><Footer /></div>
+      <div className="footer-fixed"><Footer /></div>
     </>
   )
 }

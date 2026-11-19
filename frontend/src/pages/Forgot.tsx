@@ -51,7 +51,7 @@ export default function Forgot() {
           )}
         </div>
       </div>
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0 }}><Footer /></div>
+      <div className="footer-fixed"><Footer /></div>
     </>
   )
 }
