@@ -9,7 +9,7 @@ Imagem: `ghcr.io/aprendendolinux/orbita-relay-cli` (amd64 e arm64).
 ```yaml
 services:
   orbitarelay-cli:
-    image: ghcr.io/aprendendolinux/orbita-relay-cli:1.6.0
+    image: ghcr.io/aprendendolinux/orbita-relay-cli:1.6.1
     container_name: orbitarelay-cli
     restart: unless-stopped
     ports: ["25:25", "587:587"]
