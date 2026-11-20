@@ -63,7 +63,7 @@ flowchart LR
 - **`orbitarelay-mta`**: o Exim. Recebe, assina com DKIM e entrega. A configuração é **gerada pelo painel** e recarregada sozinha.
 - **`orbitarelay-app`**: o painel e a API. Lê o log do Exim, grava no MySQL e gera a configuração do MTA.
 - **`orbitarelay-db`**: o MySQL, com mensagens, usuários e configurações.
-- **`orbitarelay-proxy`** (opcional): um proxy somente leitura da API do Docker, usado só para diagnosticar o IPv6.
+- **`orbitarelay-proxy`** (opcional): um proxy somente leitura da API do Docker, usado só para diagnosticar o IPv6. Imagem própria, construída a partir de [`proxy/`](proxy/README.md).
 
 ## Qual docker-compose usar
 
@@ -193,7 +193,7 @@ Códigos de verificação, recuperação de senha e avisos usam um modelo HTML c
 
 ## Atualizando
 
-As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app` e `ghcr.io/aprendendolinux/orbita-relay-mta` (e `orbita-relay-cli` para o relay leve; uma tag por versão e `latest`). Para atualizar, troque a tag no `docker-compose.yml` (ou use `latest`) e rode:
+As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app`, `ghcr.io/aprendendolinux/orbita-relay-mta` e `ghcr.io/aprendendolinux/orbita-relay-proxy` (e `orbita-relay-cli` para o relay leve; uma tag por versão e `latest`). Para atualizar, troque a tag no `docker-compose.yml` (ou use `latest`) e rode:
 
 ```bash
 docker compose pull && docker compose up -d

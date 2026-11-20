@@ -103,7 +103,7 @@ docker exec orbitarelay-db sh -c 'mysqldump -uorbita -p"$MYSQL_PASSWORD" orbita'
 
 ## Atualizando
 
-As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app` e `ghcr.io/aprendendolinux/orbita-relay-mta`, com uma tag por versão e `latest`. Troque a tag no compose (ou use `latest`) e rode:
+As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app`, `ghcr.io/aprendendolinux/orbita-relay-mta` e `ghcr.io/aprendendolinux/orbita-relay-proxy`, com uma tag por versão e `latest`. Troque a tag no compose (ou use `latest`) e rode:
 
 ```bash
 docker compose pull && docker compose up -d
