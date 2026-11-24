@@ -41,7 +41,7 @@ O **OrbitaRelay** combina um servidor de e-mail de saída (**Exim**) com um pain
 | **Vários servidores em um painel** | Um OrbitaRelay central recebe os eventos de outros relays (modo push, por HTTP ou HTTPS, atrás de proxy reverso). |
 | **Integração com Mailcow** | Registra as mensagens recebidas e enviadas por servidores [Mailcow](https://mailcow.email) lendo a API, sem instalar nada neles. |
 | **Autenticação forte** | Login local ou **LDAP/Active Directory**, 2FA por aplicativo (TOTP) ou e-mail, códigos de recuperação, dispositivo confiável por 30 dias e recuperação de senha por e-mail. |
-| **Redes e hostname verificados** | A rede Docker `echelon` entra sozinha na lista de quem pode enviar. O hostname do relay é verificado no DNS (A/AAAA e PTR), e só os IPs que você confirma são autorizados. Nomes atrás do proxy da Cloudflare são recusados. |
+| **Redes e hostname verificados** | As sub-redes de todas as redes Docker do servidor entram sozinhas na lista de quem pode enviar. O hostname do relay é verificado no DNS (A/AAAA e PTR), e só os IPs que você confirma são autorizados. Nomes atrás do proxy da Cloudflare são recusados. |
 | **Seguro por padrão** | Proteção contra *open relay*, segredos criptografados (AES-256-GCM), limite de tentativas de login. |
 | **Visual futurista** | Modo escuro e claro, menu recolhível, funciona no celular. |
 | **Fácil de instalar** | Um `docker compose up -d`. Imagens públicas multi-arquitetura (amd64 e arm64). |
