@@ -17,7 +17,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-var version = "1.6.5"
+var version = "1.6.6"
 
 type App struct {
 	dataDir   string
@@ -141,6 +141,8 @@ func main() {
 	go a.runPush(ctx)
 	go a.runMailcow(ctx)
 	go a.runMaintenance(ctx)
+	go a.runDockerNets(ctx)
+	go a.runCloudflareRanges(ctx)
 
 	srv := &http.Server{
 		Addr:              env("ORBITA_LISTEN", ":8080"),

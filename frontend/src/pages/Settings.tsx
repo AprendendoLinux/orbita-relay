@@ -7,10 +7,9 @@ import CollectPanel from '../components/CollectPanel'
 import Tip from '../components/Tip'
 import Ipv6Panel from '../components/Ipv6Panel'
 import HostSendTip from '../components/HostSendTip'
-import NetDetect from '../components/NetDetect'
 import Domains from './Domains'
 import DmarcHelp from '../components/DmarcHelp'
-import { mergeLines } from '../lib'
+import HostnameCheck from '../components/HostnameCheck'
 import { clearPersonalMode } from '../components/ThemeToggle'
 
 type Resp = { groups: { id: string; label: string }[]; fields: Field[] }
@@ -159,14 +158,14 @@ export default function Settings() {
         {current === 'geral' && vals.deploy_mode === 'client' && (
           <Tip title="Cliente">Os dados do servidor central ficam na aba “Envio para o servidor central”.</Tip>
         )}
-        {current === 'redes' && <NetDetect current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={saves} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />}
         {current === 'redes' && <HostSendTip />}
         {current === 'redes' && vals.ip_mode === 'dual' && <Ipv6Panel />}
+        {current === 'mta' && <HostnameCheck hostname={String(vals.mta_hostname ?? '')} mode={String(vals.relay_mode ?? 'relay')} onNets={(l) => setVals((v) => ({ ...v, relay_nets: l }))} />}
         {current === 'mta' && (
           <div className="alert info small">
             {vals.relay_mode === 'smarthost'
               ? <>No modo <b>Smarthost</b>, configure o servidor de saída na aba <b>Smarthost</b>. Quem pode enviar por este relay fica em <b>Redes e acesso</b>.</>
-              : <>No modo <b>Relay SMTP</b>, ajuste IPs públicos, DKIM e DMARC na aba <b>Entrega e DNS</b>. Quem pode enviar por este relay fica em <b>Redes e acesso</b>.</>}
+              : <>No modo <b>Relay SMTP</b>, ajuste DKIM e DMARC na aba <b>Entrega e DNS</b>. Quem pode enviar por este relay fica em <b>Redes e acesso</b>.</>}
           </div>
         )}
         {current === 'coleta' && (

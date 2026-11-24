@@ -266,38 +266,16 @@ func (a *App) handleCheckDomain(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) spfRecord(ctx context.Context, domain string) (string, string) {
-	var parts []string
-	for _, l := range strings.Split(a.sStr("public_ips"), "\n") {
-		l = strings.TrimSpace(l)
-		if ip, err := netip.ParseAddr(l); err == nil {
-			if ip.Is4() {
-				parts = append(parts, "ip4:"+l)
-			} else {
-				parts = append(parts, "ip6:"+l)
-			}
-		}
+	// O SPF autoriza o IP que o hostname do relay (HELO) aponta no DNS. Sem hostname,
+	// usa o próprio domínio de remetente.
+	if host := a.sStr("mta_hostname"); host != "" {
+		return "v=spf1 a:" + host + " ~all", "Usa o IP do hostname do relay (" + host + "), detectado pelo DNS."
 	}
-	note := "Usa os IPs públicos de saída configurados."
-	if len(parts) == 0 {
-		host := a.sStr("mta_hostname")
-		if host != "" {
-			parts = append(parts, "a:"+host)
-			note = "Usa o IP do hostname do relay (" + host + "), detectado pelo DNS."
-		} else {
-			parts = append(parts, "a:"+domain)
-			ips := lookupHostIPs(ctx, domain)
-			if len(ips) > 0 {
-				var ss []string
-				for _, ip := range ips {
-					ss = append(ss, ip.String())
-				}
-				note = "Autoriza o IP do próprio domínio (" + strings.Join(ss, ", ") + "), detectado pelo DNS."
-			} else {
-				note = "Atenção: " + domain + " ainda não tem registro A/AAAA no DNS. Informe os IPs públicos de saída em Configurações > Entrega e DNS."
-			}
-		}
+	note := "Usa o IP do próprio domínio, detectado pelo DNS."
+	if len(lookupHostIPs(ctx, domain)) == 0 {
+		note = "Atenção: " + domain + " ainda não tem registro A/AAAA no DNS. Informe o hostname do relay em Configurações > Geral."
 	}
-	return "v=spf1 " + strings.Join(parts, " ") + " ~all", note
+	return "v=spf1 a:" + domain + " ~all", note
 }
 
 func (a *App) dmarcRecord() string {

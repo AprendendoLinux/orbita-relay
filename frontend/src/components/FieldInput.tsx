@@ -33,7 +33,7 @@ export const visible = (f: Field, vals: Vals) => {
 }
 
 export default function FieldInput({ f, v, set }: { f: Field; v: unknown; set: (x: unknown) => void }) {
-  if (f.key === 'relay_nets' || f.key === 'public_ips')
+  if (f.key === 'relay_nets')
     return (
       <ListEditor
         label={f.label} help={f.help} example={f.example} value={String(v ?? '')} onChange={set}

@@ -55,7 +55,6 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("POST /api/me/mfa/trusted/revoke", a.auth("viewer", a.handleTrustedRevoke))
 	mux.HandleFunc("POST /api/me/mfa/recovery", a.auth("viewer", a.handleRecoveryRegen))
 	mux.HandleFunc("POST /api/admin/users/{id}/mfa/reset", a.auth("admin", a.handleAdminMFAReset))
-	mux.HandleFunc("POST /api/admin/networks/detect", a.auth("admin", a.handleDetectNets))
 	mux.HandleFunc("POST /api/admin/smtp/test", a.auth("admin", a.handleTestSMTP))
 	mux.HandleFunc("POST /api/admin/smarthost/test", a.auth("admin", a.handleTestSmarthost))
 	mux.HandleFunc("GET /api/me", a.auth("viewer", a.handleMe))
@@ -68,6 +67,8 @@ func (a *App) routes() http.Handler {
 
 	mux.HandleFunc("GET /api/admin/settings", a.auth("admin", a.handleGetSettings))
 	mux.HandleFunc("PUT /api/admin/settings", a.auth("admin", a.handlePutSettings))
+	mux.HandleFunc("POST /api/admin/hostname/check", a.auth("admin", a.handleCheckHostname))
+	mux.HandleFunc("POST /api/admin/hostname/authorize", a.auth("admin", a.handleAuthorizeHostname))
 	mux.HandleFunc("POST /api/admin/ldap/test", a.auth("admin", func(w http.ResponseWriter, r *http.Request) {
 		if err := a.testLDAP(); err != nil {
 			writeErr(w, 400, err.Error())

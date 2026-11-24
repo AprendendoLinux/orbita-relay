@@ -41,7 +41,8 @@ O **OrbitaRelay** combina um servidor de e-mail de saída (**Exim**) com um pain
 | **Vários servidores em um painel** | Um OrbitaRelay central recebe os eventos de outros relays (modo push, por HTTP ou HTTPS, atrás de proxy reverso). |
 | **Integração com Mailcow** | Registra as mensagens recebidas e enviadas por servidores [Mailcow](https://mailcow.email) lendo a API, sem instalar nada neles. |
 | **Autenticação forte** | Login local ou **LDAP/Active Directory**, 2FA por aplicativo (TOTP) ou e-mail, códigos de recuperação, dispositivo confiável por 30 dias e recuperação de senha por e-mail. |
-| **Seguro por padrão** | Proteção contra *open relay*, redes autorizadas detectadas sozinhas, segredos criptografados (AES-256-GCM), limite de tentativas de login. |
+| **Redes e hostname verificados** | As redes Docker do servidor entram sozinhas na lista de quem pode enviar. O hostname do relay é verificado no DNS (A/AAAA e PTR), e só os IPs que você confirma são autorizados. Nomes atrás do proxy da Cloudflare são recusados. |
+| **Seguro por padrão** | Proteção contra *open relay*, segredos criptografados (AES-256-GCM), limite de tentativas de login. |
 | **Visual futurista** | Modo escuro e claro, menu recolhível, funciona no celular. |
 | **Fácil de instalar** | Um `docker compose up -d`. Imagens públicas multi-arquitetura (amd64 e arm64). |
 
@@ -93,7 +94,7 @@ docker compose logs orbitarelay-app | grep TOKEN
   <img src="docs/img/02-primeiro-acesso-2.png" alt="Primeiro acesso, etapa 2" width="48%">
 </p>
 
-**3.** O **assistente** guia o resto: nome, fuso, modo de operação, redes autorizadas, domínios e DKIM, autenticação e logs.
+**3.** O **assistente** guia o resto: nome, fuso, modo de operação (com a verificação do hostname do relay no DNS), redes autorizadas, domínios e DKIM, autenticação e logs.
 
 **4.** Aponte suas aplicações para o servidor SMTP (porta 25 ou 587) usando o **IP da máquina**, nunca `localhost`. Veja [por quê](docs/docker-rede-ipv6.md#enviando-a-partir-do-próprio-servidor).
 
@@ -193,7 +194,7 @@ Códigos de verificação, recuperação de senha e avisos usam um modelo HTML c
 
 ## Atualizando
 
-As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app`, `ghcr.io/aprendendolinux/orbita-relay-mta` e `ghcr.io/aprendendolinux/orbita-relay-proxy` (e `orbita-relay-cli` para o relay leve; uma tag por versão e `latest`). Para atualizar, troque a tag no `docker-compose.yml` (ou use `latest`) e rode:
+As imagens públicas ficam em `ghcr.io/aprendendolinux/orbita-relay-app`, `ghcr.io/aprendendolinux/orbita-relay-mta` e `ghcr.io/aprendendolinux/orbita-relay-proxy` (e `orbita-relay-cli` para o relay leve). Os arquivos compose usam sempre a tag `latest`. Para fixar uma versão, troque para a tag dela (por exemplo `1.6.6`). Para atualizar, rode:
 
 ```bash
 docker compose pull && docker compose up -d

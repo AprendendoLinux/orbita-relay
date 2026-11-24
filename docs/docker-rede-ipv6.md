@@ -32,18 +32,12 @@ Dicas:
 
 ## Redes autorizadas
 
-A aba **Redes e acesso** define quem pode enviar. Com **Incluir automaticamente as redes detectadas** ligado (padrão), o sistema soma à sua lista:
-
-- o **loopback**;
-- a **rede Docker em que o contêiner está** (IPv4 e IPv6), lida das interfaces dele;
-- os **IPs da máquina** que ele conhece: o IP pelo qual você acessou o painel e os informados em `ORBITA_HOST_IPS`.
-
-A lista é recalculada ao iniciar e ao salvar.
+A aba **Redes e acesso** define quem pode enviar. Por padrão a lista tem só o loopback (`127.0.0.1` e `::1`). O serviço `orbitarelay-proxy` lê as **redes Docker** do servidor pela API e acrescenta à lista a sub-rede (IPv4 e IPv6) de cada uma. Quando uma rede Docker some, ela sai da lista. Os gateways dessas redes não entram: conexões vindas por eles continuam bloqueadas.
 
 <p align="center"><img src="img/21-config-redes.png" alt="Redes e acesso" width="850"></p>
 
-- **Dentro do contêiner só é possível ver as interfaces dele.** Para os IPs reais da máquina, rode `hostname -I` no servidor e cole o resultado no campo **IPs da máquina (host)**, ou fixe-os na variável `ORBITA_HOST_IPS` do serviço `orbitarelay-app` (aceita IP ou CIDR, separados por vírgula).
-- O painel **Redes encontradas** lista, de forma recolhível, outras redes Docker do host, o IP do host em cada rede e os IPs do nome DNS do painel. O botão **Adicionar todos** inclui tudo de uma vez. No **assistente**, as redes encontradas já vêm adicionadas: remova as que não quiser.
+- **IPs da máquina (host)** não entram automaticamente: de dentro do contêiner não há como lê-los. Adicione-os manualmente na lista, por exemplo com o resultado de `hostname -I` no servidor.
+- Se você **remover** uma rede Docker da lista, ela não volta enquanto continuar existindo no Docker. Se ela sumir e reaparecer, volta a ser adicionada.
 - Em **Redes autorizadas a enviar**, cada item tem **Remover**, e há um campo para adicionar manualmente (vários valores por vez, com validação de IPv4, IPv6 e CIDR).
 
 > Revise a lista: ao adicionar outras redes Docker e os IPs do DNS do seu domínio, você autoriza essas origens a enviar e-mails.
