@@ -63,12 +63,12 @@ Define **quem pode enviar e-mails por este relay**.
 
 | Campo | Para que serve |
 |---|---|
-| **Redes autorizadas a enviar** | Lista de IPs e redes (CIDR, IPv4 e IPv6). Por padrão contém só o loopback (`127.0.0.1` e `::1`). As **redes Docker** do servidor (sub-redes IPv4 e IPv6) entram sozinhas, e são retiradas quando somem do Docker. Cada item tem o botão **Remover** e há um campo para adicionar vários de uma vez, com validação. |
+| **Redes autorizadas a enviar** | Lista de IPs e redes (CIDR, IPv4 e IPv6). Por padrão contém só o loopback (`127.0.0.1` e `::1`). A sub-rede (IPv4 e IPv6) da rede Docker **`echelon`** entra sozinha, e sai quando a rede some do Docker. Outras redes Docker só entram se estiverem em `ORBITA_DOCKER_NETS`. Cada item tem o botão **Remover** e há um campo para adicionar vários de uma vez, com validação. |
 | **Modo IP** | `dual` (IPv4 e IPv6) ou `ipv4`. |
 
 <p align="center"><img src="img/21-config-redes.png" alt="Aba Redes e acesso" width="800"></p>
 
-O painel **Redes encontradas** mostra o resumo "Quem pode enviar agora" e uma lista recolhível de **Outros IPs e redes encontrados** (outras redes Docker, o IP do host em cada rede e os IPs do nome DNS do painel) com **Adicionar todos**. Veja os detalhes e o diagnóstico de IPv6 em [Docker, rede e IPv6](docker-rede-ipv6.md).
+Os IPs da máquina entram pela verificação do hostname do relay, na aba **Geral** (ou no assistente): você confirma quais IPs são desta máquina. Veja os detalhes e o diagnóstico de IPv6 em [Docker, rede e IPv6](docker-rede-ipv6.md).
 
 > Conexões que chegam pelo gateway do Docker (IP de origem mascarado) são **sempre recusadas**, mesmo dentro de uma rede autorizada. Veja o motivo em [Docker, rede e IPv6](docker-rede-ipv6.md).
 

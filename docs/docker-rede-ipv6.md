@@ -32,15 +32,15 @@ Dicas:
 
 ## Redes autorizadas
 
-A aba **Redes e acesso** define quem pode enviar. Por padrão a lista tem só o loopback (`127.0.0.1` e `::1`). O serviço `orbitarelay-proxy` lê as **redes Docker** do servidor pela API e acrescenta à lista a sub-rede (IPv4 e IPv6) de cada uma. Quando uma rede Docker some, ela sai da lista. Os gateways dessas redes não entram: conexões vindas por eles continuam bloqueadas.
+A aba **Redes e acesso** define quem pode enviar. Por padrão a lista tem só o loopback (`127.0.0.1` e `::1`). O serviço `orbitarelay-proxy` lê as redes Docker pela API e acrescenta à lista a sub-rede (IPv4 e IPv6) da rede **`echelon`**, a única incluída por padrão. Outras redes entram só se você listá-las em `ORBITA_DOCKER_NETS` (nomes separados por vírgula) no serviço `orbitarelay-app`. Quando a rede some do Docker, ela sai da lista. Os gateways dessas redes não entram: conexões vindas por eles continuam bloqueadas.
 
 <p align="center"><img src="img/21-config-redes.png" alt="Redes e acesso" width="850"></p>
 
 - **IPs da máquina (host)** não entram automaticamente: de dentro do contêiner não há como lê-los. Adicione-os manualmente na lista, por exemplo com o resultado de `hostname -I` no servidor.
-- Se você **remover** uma rede Docker da lista, ela não volta enquanto continuar existindo no Docker. Se ela sumir e reaparecer, volta a ser adicionada.
+- Se você **remover** a sub-rede da lista, ela não volta enquanto a rede continuar existindo no Docker. Se a rede sumir e reaparecer, volta a ser adicionada.
 - Em **Redes autorizadas a enviar**, cada item tem **Remover**, e há um campo para adicionar manualmente (vários valores por vez, com validação de IPv4, IPv6 e CIDR).
 
-> Revise a lista: ao adicionar outras redes Docker e os IPs do DNS do seu domínio, você autoriza essas origens a enviar e-mails.
+> Revise a lista: cada rede ou IP que você adicionar à mão autoriza essas origens a enviar e-mails sem senha.
 
 ## IPv6 no Docker
 

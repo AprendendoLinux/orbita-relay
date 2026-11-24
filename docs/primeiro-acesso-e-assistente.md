@@ -45,7 +45,7 @@ O assistente guia as configurações essenciais. Tudo pode ser alterado depois e
 
 ### Dicas para o passo Redes
 
-As redes Docker do servidor já aparecem na lista. Revise e remova o que não quiser. Para os IPs reais da máquina, rode `hostname -I` no servidor e adicione-os manualmente na lista.
+A sub-rede da rede Docker `echelon` já aparece na lista. Revise o que quiser. Os IPs da máquina entram pela verificação do hostname do relay, em que você confirma cada IP.
 
 ## Depois do assistente
 
