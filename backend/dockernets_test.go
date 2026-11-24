@@ -40,4 +40,3 @@ func TestMergeDockerNets(t *testing.T) {
 		})
 	}
 }
-
