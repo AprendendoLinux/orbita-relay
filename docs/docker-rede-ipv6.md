@@ -32,7 +32,7 @@ Dicas:
 
 ## Redes autorizadas
 
-A aba **Redes e acesso** define quem pode enviar. Por padrão a lista tem só o loopback (`127.0.0.1` e `::1`). O serviço `orbitarelay-proxy` lê as redes Docker pela API e acrescenta à lista a sub-rede (IPv4 e IPv6) da rede **`echelon`**, a única incluída por padrão. Outras redes entram só se você listá-las em `ORBITA_DOCKER_NETS` (nomes separados por vírgula) no serviço `orbitarelay-app`. Quando a rede some do Docker, ela sai da lista. Os gateways dessas redes não entram: conexões vindas por eles continuam bloqueadas.
+A aba **Redes e acesso** define quem pode enviar. Por padrão a lista tem só o loopback (`127.0.0.1` e `::1`). O serviço `orbitarelay-proxy` lê as redes Docker pela API e acrescenta à lista a sub-rede (IPv4 e IPv6) de **todas** as redes Docker do servidor, exceto `host` e `none`. Quando uma rede some do Docker, a sub-rede sai da lista. Qualquer contêiner dessas redes passa a poder enviar sem senha. Os gateways dessas redes não entram: conexões vindas por eles continuam bloqueadas.
 
 <p align="center"><img src="img/21-config-redes.png" alt="Redes e acesso" width="850"></p>
 

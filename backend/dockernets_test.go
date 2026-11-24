@@ -41,15 +41,3 @@ func TestMergeDockerNets(t *testing.T) {
 	}
 }
 
-func TestDockerNetsAllowedDefault(t *testing.T) {
-	t.Setenv("ORBITA_DOCKER_NETS", "")
-	got := dockerNetsAllowed()
-	if !got["echelon"] || len(got) != 1 {
-		t.Fatalf("padrão deveria ser só echelon, got %v", got)
-	}
-	t.Setenv("ORBITA_DOCKER_NETS", " echelon , outra ")
-	got = dockerNetsAllowed()
-	if !got["echelon"] || !got["outra"] || got["bridge"] {
-		t.Fatalf("lista configurada incorreta: %v", got)
-	}
-}
