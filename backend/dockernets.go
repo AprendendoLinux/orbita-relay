@@ -19,6 +19,22 @@ const dockerNetsKey = "relay_nets_docker"
 
 var errNoDockerAPI = errors.New("ORBITA_DOCKER_API não configurado")
 
+// dockerNetsAllowed lista as redes Docker cujas sub-redes podem enviar, em ORBITA_DOCKER_NETS
+// (separadas por vírgula). Padrão: só a rede "echelon". Redes fora dessa lista não entram.
+func dockerNetsAllowed() map[string]bool {
+	raw := os.Getenv("ORBITA_DOCKER_NETS")
+	if strings.TrimSpace(raw) == "" {
+		raw = "echelon"
+	}
+	out := map[string]bool{}
+	for _, n := range strings.Split(raw, ",") {
+		if n = strings.TrimSpace(n); n != "" {
+			out[n] = true
+		}
+	}
+	return out
+}
+
 type dockerNet struct {
 	Name, Driver string
 	Subnets      []string
@@ -85,9 +101,13 @@ func (a *App) syncDockerNetworks(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	allowed := dockerNetsAllowed()
 	var desired []string
 	inDesired := map[string]bool{}
 	for _, n := range nets {
+		if !allowed[n.Name] {
+			continue
+		}
 		for _, s := range n.Subnets {
 			if !inDesired[s] {
 				inDesired[s] = true
