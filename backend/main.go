@@ -19,7 +19,7 @@ import (
 	"orbitarelay/internal/cloudflare"
 )
 
-var version = "1.6.6"
+var version = "1.6.7"
 
 type App struct {
 	dataDir   string
