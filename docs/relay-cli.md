@@ -34,8 +34,7 @@ docker compose -f docker-compose.cli-smarthost.yml up -d
 environment:
   ORBITA_HOSTNAME: relay.exemplo.com.br
   ORBITA_DOMAINS: exemplo.com.br
-  ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
-  ORBITA_PUBLIC_IPS: 203.0.113.10
+  ORBITA_RELAY_NETS: 192.168.0.0/16
 ```
 
 ### Mínimo no modo smarthost
@@ -47,7 +46,7 @@ environment:
   ORBITA_SMARTHOST_HOST: smtp-relay.gmail.com
   ORBITA_SMARTHOST_USER: usuario@exemplo.com.br
   ORBITA_SMARTHOST_PASS: senha
-  ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
+  ORBITA_RELAY_NETS: 192.168.0.0/16
 ```
 
 > Mantenha o volume **`/data`**: ele guarda as chaves DKIM (modo relay), o certificado TLS e o cursor de envio. Sem ele, as chaves mudam a cada recriação e o DNS fica errado (o contêiner avisa no log).
@@ -60,13 +59,11 @@ environment:
 | `ORBITA_HOSTNAME` | — (**obrigatória**) | Nome DNS do relay (usado no EHLO e no certificado) |
 | `ORBITA_IP_MODE` | `dual` | `dual` (IPv4+IPv6) ou `ipv4` |
 | `ORBITA_MAX_MESSAGE_MB` | `25` | Tamanho máximo da mensagem |
-| `ORBITA_RELAY_NETS` | `10.0.0.0/8,192.168.0.0/16,fd00::/8` | IPs/redes autorizados a enviar |
-| `ORBITA_RELAY_NETS_AUTO` | `true` | Soma o loopback e a rede Docker do contêiner |
-| `ORBITA_HOST_IPS` | — | IPs da máquina a autorizar |
+| `ORBITA_RELAY_NETS` | — | IPs/redes autorizados a enviar, além do loopback (`127.0.0.1` e `::1`, sempre). Nada além disso é detectado sozinho |
+| `ORBITA_HOST_IPS` | — | IPs desta máquina a autorizar (confirmados por você). O relay avisa se não aparecerem no DNS de `ORBITA_HOSTNAME`. IPs da Cloudflare são recusados |
 | `ORBITA_DOMAINS` | — | Domínios de envio: recebem chave DKIM e restringem o remetente |
 | `ORBITA_DKIM_SELECTOR` | `dkim` | Seletor DKIM |
 | `ORBITA_ENFORCE_SENDER_DOMAINS` | `true` | Recusa remetentes fora de `ORBITA_DOMAINS` |
-| `ORBITA_PUBLIC_IPS` | — | IPs públicos de saída (para o SPF). Sem isso, usa `a:<hostname>` |
 | `ORBITA_DMARC_POLICY` / `ORBITA_DMARC_RUA` | `none` / — | Texto do registro DMARC |
 | `ORBITA_SMARTHOST_HOST` / `_PORT` | — / `587` | Servidor de saída (modo `smarthost`) |
 | `ORBITA_SMARTHOST_TLS` | `starttls` | `starttls`, `tls` ou `none` |

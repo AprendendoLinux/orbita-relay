@@ -57,12 +57,11 @@ services:
 
       # ------------------------------------------------- Quem pode enviar (redes)
       # IPs ou redes CIDR autorizados a enviar, separados por vírgula.
-      # Padrão: 10.0.0.0/8,192.168.0.0/16,fd00::/8
+      # Padrão: nenhuma (só o loopback é autorizado)
       # Cuidado: tudo o que estiver aqui pode mandar e-mail por este relay.
-      ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
+      # ORBITA_RELAY_NETS: 192.168.0.0/16   # além do loopback, que é sempre autorizado
 
       # true (padrão): soma o loopback e a rede Docker do próprio contêiner à lista acima.
-      # ORBITA_RELAY_NETS_AUTO: "true"
 
       # IPs da máquina hospedeira a autorizar também (opcional).
       # ORBITA_HOST_IPS: 192.168.0.10
@@ -94,9 +93,7 @@ services:
       # confirmar que SPF e DKIM passam.
       # Além disso: PTR (DNS reverso) do IP público e porta 25 de saída liberada na rede.
 
-      # IPs públicos de saída, para montar o SPF (IPv4 e IPv6, separados por vírgula).
-      # Sem isso, o SPF usa "a:<ORBITA_HOSTNAME>".
-      ORBITA_PUBLIC_IPS: 203.0.113.10
+      # O SPF usa "a:<ORBITA_HOSTNAME>": o nome do relay precisa apontar (A/AAAA) para o IP do servidor.
 
       # Política e e-mail de relatórios do DMARC. Mudam só o texto mostrado: o DMARC em si vive no DNS.
       # ORBITA_DMARC_POLICY: none        # none, quarantine ou reject

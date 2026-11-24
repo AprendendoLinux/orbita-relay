@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"orbitarelay/internal/cloudflare"
 )
 
 // Hostname do relay (modo Relay SMTP): o painel consulta o A/AAAA e o PTR, e só
@@ -42,7 +44,7 @@ func suggestedRelayHostname(r *http.Request) string {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	for _, ip := range resolveRelayHost(ctx, name) {
-		if isCloudflareIP(ip) {
+		if cloudflare.IsCloudflare(ip) {
 			return ""
 		}
 	}
@@ -92,7 +94,7 @@ func (a *App) handleCheckHostname(w http.ResponseWriter, r *http.Request) {
 	res := hostnameCheck{Hostname: host, PTR: map[string]string{}, IPs: []string{}, Tracked: a.trackedFor(host), Cloudflare: []string{}}
 	for _, ip := range resolveRelayHost(ctx, host) {
 		res.IPs = append(res.IPs, ip.String())
-		if isCloudflareIP(ip) {
+		if cloudflare.IsCloudflare(ip) {
 			res.Cloudflare = append(res.Cloudflare, ip.String())
 		}
 		pctx, pcancel := context.WithTimeout(ctx, 3*time.Second)
@@ -102,7 +104,7 @@ func (a *App) handleCheckHostname(w http.ResponseWriter, r *http.Request) {
 		pcancel()
 	}
 	res.OK = len(res.IPs) > 0
-	src, upd, stale := cloudflareStatus()
+	src, upd, stale := cloudflare.Status()
 	res.CFSource, res.CFStale = src, stale
 	if !upd.IsZero() {
 		res.CFUpdated = upd.Format(time.RFC3339)
@@ -132,7 +134,7 @@ func (a *App) handleAuthorizeHostname(w http.ResponseWriter, r *http.Request) {
 	// Só aceita IPs que o DNS devolve agora: o administrador escolhe, mas não digita IPs livres.
 	allowed := map[string]bool{}
 	for _, ip := range resolveRelayHost(ctx, host) {
-		if isCloudflareIP(ip) {
+		if cloudflare.IsCloudflare(ip) {
 			continue // IP da Cloudflare nunca é autorizado
 		}
 		allowed[ip.String()] = true

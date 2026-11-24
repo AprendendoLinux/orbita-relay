@@ -15,6 +15,8 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	"orbitarelay/internal/cloudflare"
 )
 
 var version = "1.6.6"
@@ -142,7 +144,7 @@ func main() {
 	go a.runMailcow(ctx)
 	go a.runMaintenance(ctx)
 	go a.runDockerNets(ctx)
-	go a.runCloudflareRanges(ctx)
+	go cloudflare.Run(ctx)
 
 	srv := &http.Server{
 		Addr:              env("ORBITA_LISTEN", ":8080"),

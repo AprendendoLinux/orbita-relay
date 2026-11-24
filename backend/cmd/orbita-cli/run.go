@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"orbitarelay/internal/cloudflare"
 	"orbitarelay/internal/eximlog"
 	"orbitarelay/internal/push"
 )
@@ -84,7 +85,19 @@ func run() int {
 		}
 		return 2
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	refreshCloudflare(ctx)
+	if errs := c.cloudflareErrors(); len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, "[cli] erro de configuração:", e)
+		}
+		return 2
+	}
 	c.banner()
+	for _, w := range c.hostnameWarnings(ctx) {
+		logf("atenção: %s", w)
+	}
 	if err := c.prepare(); err != nil {
 		logf("falha ao preparar o ambiente: %v", err)
 		return 1
@@ -95,11 +108,10 @@ func run() int {
 	}
 	c.printDNS()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
 	go func() { defer wg.Done(); superviseExim(ctx) }()
+	go func() { defer wg.Done(); cloudflare.Run(ctx) }()
 	go tailLogs(ctx)
 	go rotateLoop(ctx)
 	if c.centralOn() {
