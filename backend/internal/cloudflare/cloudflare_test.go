@@ -1,4 +1,4 @@
-package main
+package cloudflare
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestIsCloudflareIP(t *testing.T) {
+func TestIsCloudflare(t *testing.T) {
 	cases := map[string]bool{
 		"172.67.152.11":             true,
 		"104.21.33.247":             true,
@@ -18,24 +18,24 @@ func TestIsCloudflareIP(t *testing.T) {
 		"10.0.0.5":                  false,
 	}
 	for s, want := range cases {
-		if got := isCloudflareIP(netip.MustParseAddr(s)); got != want {
+		if got := IsCloudflare(netip.MustParseAddr(s)); got != want {
 			t.Errorf("%s: got %v, want %v", s, got, want)
 		}
 	}
 }
 
-func TestParseCloudflareList(t *testing.T) {
+func TestParseList(t *testing.T) {
 	var v4 []string
 	for i := 0; i < 12; i++ {
 		v4 = append(v4, fmt.Sprintf("10.%d.0.0/16", i))
 	}
-	if got, err := parseCloudflareList(strings.Join(v4, "\n")+"\n", 10); err != nil || len(got) != 12 {
+	if got, err := ParseList(strings.Join(v4, "\n")+"\n", 10); err != nil || len(got) != 12 {
 		t.Fatalf("lista válida: got %d, err %v", len(got), err)
 	}
-	if _, err := parseCloudflareList("<html>erro</html>", 1); err == nil {
+	if _, err := ParseList("<html>erro</html>", 1); err == nil {
 		t.Error("HTML deveria ser rejeitado")
 	}
-	if _, err := parseCloudflareList("10.0.0.0/8\n", 10); err == nil {
+	if _, err := ParseList("10.0.0.0/8\n", 10); err == nil {
 		t.Error("lista curta deveria ser rejeitada")
 	}
 }

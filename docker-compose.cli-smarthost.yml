@@ -55,12 +55,11 @@ services:
 
       # ------------------------------------------------- Quem pode enviar (redes)
       # IPs ou redes CIDR autorizados a enviar, separados por vírgula.
-      # Padrão: 10.0.0.0/8,192.168.0.0/16,fd00::/8
+      # Padrão: nenhuma (só o loopback é autorizado)
       # Cuidado: tudo o que estiver aqui pode mandar e-mail por este relay.
-      ORBITA_RELAY_NETS: 10.0.0.0/8,192.168.0.0/16
+      # ORBITA_RELAY_NETS: 192.168.0.0/16   # além do loopback, que é sempre autorizado
 
       # true (padrão): soma o loopback e a rede Docker do próprio contêiner à lista acima.
-      # ORBITA_RELAY_NETS_AUTO: "true"
 
       # IPs da máquina hospedeira a autorizar também (opcional).
       # ORBITA_HOST_IPS: 192.168.0.10

@@ -14,7 +14,7 @@ Ao acessar a porta publicada por `localhost`, o Docker encaminha a conexão por 
 
 ### Como configurar
 
-Troque `192.168.0.10` pelo IP da máquina. Ele precisa estar em **Redes autorizadas** (o IP da máquina acessada pelo painel já é aprendido, e `192.168.0.0/16`, `10.0.0.0/8` e `fd00::/8` vêm no padrão).
+Troque `192.168.0.10` pelo IP da máquina. Ele precisa estar em **Redes autorizadas**: no painel, confirme o IP na verificação do hostname do relay; na CLI, informe-o em `ORBITA_HOST_IPS`. Nada além do loopback é autorizado por padrão.
 
 | Cliente | Configuração |
 |---|---|

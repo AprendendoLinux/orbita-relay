@@ -11,19 +11,17 @@ import (
 )
 
 type Config struct {
-	Mode          string
-	Hostname      string
-	IPv4Only      bool
-	MaxMB         int
-	RelayNets     []string
-	RelayNetsAuto bool
-	HostIPs       []string
-	Domains       []string
-	Selector      string
-	Enforce       bool
-	PublicIPs     []string
-	DMARCPolicy   string
-	DMARCRua      string
+	Mode        string
+	Hostname    string
+	IPv4Only    bool
+	MaxMB       int
+	RelayNets   []string
+	HostIPs     []string
+	Domains     []string
+	Selector    string
+	Enforce     bool
+	DMARCPolicy string
+	DMARCRua    string
 
 	SHHost string
 	SHPort int
@@ -125,15 +123,19 @@ func loadConfig(get func(string) string) (Config, []string) {
 	}
 	c.MaxMB = num("ORBITA_MAX_MESSAGE_MB", 25, 1, 1024)
 
-	nets := str("ORBITA_RELAY_NETS", "10.0.0.0/8,192.168.0.0/16,fd00::/8")
-	for _, n := range splitList(nets) {
+	// Quem pode enviar: loopback sempre, mais o que estiver aqui. Nada é detectado sozinho.
+	for _, n := range splitList(str("ORBITA_RELAY_NETS", "")) {
 		if v, ok := validNet(n); ok {
 			c.RelayNets = append(c.RelayNets, v)
 		} else {
 			bad("ORBITA_RELAY_NETS: %q não é um IP nem uma rede CIDR válida", n)
 		}
 	}
-	c.RelayNetsAuto = flag("ORBITA_RELAY_NETS_AUTO", true)
+	for _, k := range []string{"ORBITA_RELAY_NETS_AUTO", "ORBITA_PUBLIC_IPS"} {
+		if get(k) != "" {
+			bad("%s foi removida: as redes autorizadas agora seguem o painel (use ORBITA_RELAY_NETS e ORBITA_HOST_IPS; o SPF usa ORBITA_HOSTNAME)", k)
+		}
+	}
 	for _, n := range splitList(get("ORBITA_HOST_IPS")) {
 		if v, ok := validNet(n); ok {
 			c.HostIPs = append(c.HostIPs, v)
@@ -163,13 +165,6 @@ func loadConfig(get func(string) string) (Config, []string) {
 		c.Enforce = false
 	}
 
-	for _, ip := range splitList(get("ORBITA_PUBLIC_IPS")) {
-		if a, err := netip.ParseAddr(ip); err == nil {
-			c.PublicIPs = append(c.PublicIPs, a.Unmap().String())
-		} else {
-			bad("ORBITA_PUBLIC_IPS: %q não é um IP válido", ip)
-		}
-	}
 	c.DMARCPolicy = strings.ToLower(str("ORBITA_DMARC_POLICY", "none"))
 	if c.DMARCPolicy != "none" && c.DMARCPolicy != "quarantine" && c.DMARCPolicy != "reject" {
 		bad("ORBITA_DMARC_POLICY: use none, quarantine ou reject")
@@ -231,38 +226,20 @@ func (c Config) effectiveNets() []string {
 			out = append(out, s)
 		}
 	}
+	add("127.0.0.1")
+	add("::1")
 	for _, n := range c.RelayNets {
 		add(n)
 	}
-	if c.RelayNetsAuto {
-		add("127.0.0.1")
-		add("::1")
-		for _, n := range ifaceNets() {
-			add(n)
-		}
-		for _, n := range c.HostIPs {
-			add(n)
-		}
-	}
-	if len(out) == 0 {
-		out = []string{"127.0.0.1", "::1"}
+	for _, n := range c.HostIPs {
+		add(n)
 	}
 	return out
 }
 
 func (c Config) spfRecord() string {
-	var parts []string
-	for _, ip := range c.PublicIPs {
-		if a, err := netip.ParseAddr(ip); err == nil && a.Is6() {
-			parts = append(parts, "ip6:"+ip)
-		} else {
-			parts = append(parts, "ip4:"+ip)
-		}
-	}
-	if len(parts) == 0 {
-		parts = []string{"a:" + c.Hostname}
-	}
-	return "v=spf1 " + strings.Join(parts, " ") + " ~all"
+	// Mesmo critério do painel: o SPF autoriza o IP que o hostname do relay aponta no DNS.
+	return "v=spf1 a:" + c.Hostname + " ~all"
 }
 
 func (c Config) dmarcRecord() string {

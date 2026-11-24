@@ -1,4 +1,4 @@
-package main
+package cloudflare
 
 import (
 	"context"
@@ -54,7 +54,8 @@ func mustPrefixes(ss ...string) []netip.Prefix {
 	return out
 }
 
-func isCloudflareIP(ip netip.Addr) bool {
+// IsCloudflare informa se o IP está em uma faixa do proxy da Cloudflare.
+func IsCloudflare(ip netip.Addr) bool {
 	ip = ip.Unmap()
 	cfState.RLock()
 	defer cfState.RUnlock()
@@ -68,7 +69,8 @@ func isCloudflareIP(ip netip.Addr) bool {
 
 // parseCloudflareList lê uma lista de faixas (uma por linha). Qualquer linha inválida
 // rejeita a lista inteira, e uma lista muito curta também, para não aceitar página de erro.
-func parseCloudflareList(body string, minCount int) ([]netip.Prefix, error) {
+// ParseList lê uma lista de faixas (uma por linha).
+func ParseList(body string, minCount int) ([]netip.Prefix, error) {
 	var out []netip.Prefix
 	for _, l := range strings.Split(body, "\n") {
 		l = strings.TrimSpace(l)
@@ -105,11 +107,11 @@ func fetchCloudflareList(ctx context.Context, client *http.Client, url string, m
 	if err != nil {
 		return nil, err
 	}
-	return parseCloudflareList(string(body), minCount)
+	return ParseList(string(body), minCount)
 }
 
-// refreshCloudflareRanges baixa as duas listas. Só troca a lista em uso se as duas derem certo.
-func refreshCloudflareRanges(ctx context.Context) error {
+// Refresh baixa as duas listas. Só troca a lista em uso se as duas derem certo.
+func Refresh(ctx context.Context) error {
 	client := &http.Client{Timeout: 15 * time.Second}
 	v4, err := fetchCloudflareList(ctx, client, cloudflareURLv4, 10)
 	if err != nil {
@@ -127,8 +129,8 @@ func refreshCloudflareRanges(ctx context.Context) error {
 	return nil
 }
 
-// cloudflareStatus informa de onde vem a lista em uso, para a tela de verificação.
-func cloudflareStatus() (source string, updated time.Time, stale bool) {
+// Status informa de onde vem a lista em uso, para a tela de verificação.
+func Status() (source string, updated time.Time, stale bool) {
 	cfState.RLock()
 	defer cfState.RUnlock()
 	if cfState.updated.IsZero() {
@@ -137,8 +139,8 @@ func cloudflareStatus() (source string, updated time.Time, stale bool) {
 	return "baixada da Cloudflare", cfState.updated, time.Since(cfState.updated) > cfStaleAfter
 }
 
-// runCloudflareRanges mantém a lista atualizada enquanto o app roda.
-func (a *App) runCloudflareRanges(ctx context.Context) {
+// Run mantém a lista atualizada enquanto o processo roda. Bloqueia até ctx terminar.
+func Run(ctx context.Context) {
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for {
@@ -146,7 +148,7 @@ func (a *App) runCloudflareRanges(ctx context.Context) {
 		updated := cfState.updated
 		cfState.RUnlock()
 		if updated.IsZero() || time.Since(updated) >= cfRefreshEvery {
-			if err := refreshCloudflareRanges(ctx); err != nil && ctx.Err() == nil {
+			if err := Refresh(ctx); err != nil && ctx.Err() == nil {
 				log.Printf("faixas da Cloudflare: %v (usando a lista em uso)", err)
 			}
 		}
