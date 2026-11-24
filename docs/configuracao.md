@@ -9,7 +9,7 @@ Tudo é configurado em **Configurações**, em abas por finalidade. As abas segu
 | [Servidor de e-mail](#servidor-de-e-mail) | Modo de operação, hostname, tamanho máximo | Sempre |
 | [Smarthost](#smarthost) | Servidor, porta, criptografia, usuário e senha, com envio de teste | Só no modo Smarthost |
 | [Redes e acesso](#redes-e-acesso) | Redes autorizadas, modo IP, IPv6 | Sempre |
-| [Entrega e DNS](#entrega-e-dns) | IPs públicos, DKIM, DMARC e domínios | Só no modo Relay SMTP |
+| [Entrega e DNS](#entrega-e-dns) | DKIM, DMARC e domínios | Só no modo Relay SMTP |
 | [Autenticação](#autenticação) | Login local ou LDAP/AD | Sempre |
 | [E-mail do sistema (2FA)](#e-mail-do-sistema-2fa) | SMTP usado para códigos e recuperação de senha | Sempre |
 | [Logs e retenção](#logs-e-retenção) | Retenção no banco e rotação do log | Sempre |
@@ -63,8 +63,7 @@ Define **quem pode enviar e-mails por este relay**.
 
 | Campo | Para que serve |
 |---|---|
-| **Redes autorizadas a enviar** | Lista de IPs e redes (CIDR, IPv4 e IPv6). Cada item tem o botão **Remover** e há um campo para adicionar vários de uma vez, com validação. |
-| **Incluir automaticamente as redes detectadas** | Soma à lista o loopback, a rede Docker em que o contêiner está (IPv4 e IPv6) e os IPs da máquina conhecidos. |
+| **Redes autorizadas a enviar** | Lista de IPs e redes (CIDR, IPv4 e IPv6). Por padrão contém só o loopback (`127.0.0.1` e `::1`). As **redes Docker** do servidor (sub-redes IPv4 e IPv6) entram sozinhas, e são retiradas quando somem do Docker. Cada item tem o botão **Remover** e há um campo para adicionar vários de uma vez, com validação. |
 | **Modo IP** | `dual` (IPv4 e IPv6) ou `ipv4`. |
 
 <p align="center"><img src="img/21-config-redes.png" alt="Aba Redes e acesso" width="800"></p>

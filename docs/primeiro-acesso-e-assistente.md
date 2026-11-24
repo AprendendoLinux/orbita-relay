@@ -27,7 +27,7 @@ O assistente guia as configurações essenciais. Tudo pode ser alterado depois e
 | **Implantação** | **Standalone** (instalação única), **Servidor central** (recebe eventos de outros relays) ou **Cliente** (envia os eventos a um central). Veja [Vários servidores](multi-servidor.md). |
 | **Modo** | **Relay SMTP** (entrega direta) ou **Smarthost** (encaminha por um provedor), hostname do relay (HELO, obrigatório) e tamanho máximo da mensagem. |
 | **Redes** | Quem pode enviar e-mails por este relay. As redes encontradas já vêm adicionadas. |
-| **Entrega e DNS** | (Só no modo Relay) seletor DKIM, IPs públicos de saída, política DMARC, cadastro de domínios com a chave DKIM e os registros de DNS. |
+| **Entrega e DNS** | (Só no modo Relay) seletor DKIM, política DMARC, cadastro de domínios com a chave DKIM e os registros de DNS. |
 | **Autenticação** | Login local ou LDAP/AD. Veja [LDAP / Active Directory](ldap-ad.md). |
 | **Logs** | Retenção no banco e rotação do log do Exim. |
 | **Resumo** | Revisão antes de aplicar. |
@@ -45,7 +45,7 @@ O assistente guia as configurações essenciais. Tudo pode ser alterado depois e
 
 ### Dicas para o passo Redes
 
-O sistema detecta a rede Docker em que está e a inclui. Ao chegar neste passo, **todas as redes encontradas** (outras redes Docker, o IP do host em cada rede e os IPs do nome DNS do painel) já são adicionadas à lista. **Revise e remova** o que não quiser. Para os IPs reais da máquina, rode `hostname -I` no servidor e cole o resultado no campo **IPs da máquina (host)**.
+As redes Docker do servidor já aparecem na lista. Revise e remova o que não quiser. Para os IPs reais da máquina, rode `hostname -I` no servidor e adicione-os manualmente na lista.
 
 ## Depois do assistente
 

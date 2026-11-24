@@ -12,9 +12,8 @@ No modo **Relay SMTP**, o servidor de destino confere se o seu domínio autoriza
 
 1. **Configure os parâmetros** em **Configurações > Entrega e DNS**:
    - **Seletor DKIM** (padrão `dkim`);
-   - **IPs públicos de saída** (IPv4 e IPv6 pelos quais o relay envia);
-   - **Política DMARC** e **e-mail para relatórios** (rua).
-2. **Salve.**
+   - **Política DMARC** e **e-mail para relatórios** (rua). Essas duas opções são salvas automaticamente quando você as altera.
+2. Não há campo de IPs de saída: o SPF é montado pelo hostname do relay (veja abaixo).
 3. **Adicione o domínio** no campo **Adicionar domínio**. A **chave DKIM (RSA 2048) é gerada e ativada na hora**, e os três registros aparecem prontos.
 4. **Publique os registros TXT** no DNS do domínio. Cada registro tem um botão para copiar o valor e um botão pequeno (⧉) para copiar o **nome completo** (por exemplo `_dmarc.seudominio.com.br`).
 5. Clique em **Verificar DNS**. Cada registro mostra **✓ Registro encontrado no DNS** (no DKIM: "igual à chave gerada") ou, se estiver pendente ou diferente, um recolhível com o que foi encontrado.
@@ -27,11 +26,14 @@ No modo **Relay SMTP**, o servidor de destino confere se o seu domínio autoriza
 
 O valor depende do que está configurado, nesta ordem:
 
-1. **IPs públicos de saída** configurados → `v=spf1 ip4:203.0.113.10 ip6:2001:db8:10::10 ~all`.
-2. Senão, o **hostname do relay** → `v=spf1 a:relay.exemplo.com.br ~all`.
-3. Senão, o **próprio domínio adicionado** → `v=spf1 a:seudominio.com.br ~all`, mostrando os IPs que o DNS devolve e avisando se o domínio não tiver registro A ou AAAA.
+1. Com o **hostname do relay** configurado → `v=spf1 a:relay.exemplo.com.br ~all`.
+2. Senão, o **próprio domínio adicionado** → `v=spf1 a:seudominio.com.br ~all`, avisando se o domínio não tiver registro A ou AAAA.
 
-> `a:<domínio>` só funciona se esse nome apontar para o servidor que envia. Se você envia por `relay.exemplo.com.br` mas o domínio de e-mail é `empresa.com.br`, preencha o hostname do relay ou os IPs públicos.
+> **Verificar hostname:** no modo Relay SMTP, o botão **Verificar hostname** (no assistente e em Configurações > Geral) consulta o A/AAAA e o PTR do nome. Os IPs encontrados são listados, e só os que você marcar entram em **Redes autorizadas a enviar**, como `/32` ou `/128`. Se o hostname mudar, os IPs autorizados por ele saem da lista. Se o DNS mudar depois, rode a verificação de novo.
+
+> **Proxy da Cloudflare:** o nome do relay precisa ser **DNS only** (nuvem cinza). Com a nuvem laranja, o A/AAAA aponta para a Cloudflare, o painel avisa e nenhum IP da Cloudflare pode ser autorizado. As faixas de IP da Cloudflare são baixadas de cloudflare.com ao iniciar e uma vez por dia; se o download falhar, a tela avisa quando a lista estiver desatualizada. O nome do painel pode continuar atrás do proxy, porque ele só atende web. No assistente, é obrigatório clicar em **Verificar hostname** antes de avançar no modo Relay SMTP.
+
+> `a:<nome>` autoriza os IPs que esse nome aponta no DNS. Por isso o hostname do relay precisa apontar para o IP de saída. Se o servidor enviar por um IP que não está no registro A/AAAA desse nome, o SPF não o autoriza.
 
 Se já existir um SPF no domínio, **mescle** os mecanismos em um único registro (um domínio só pode ter um SPF).
 

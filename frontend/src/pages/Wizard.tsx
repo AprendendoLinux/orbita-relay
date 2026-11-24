@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useBranding } from '../branding'
@@ -9,10 +9,9 @@ import CollectPanel from '../components/CollectPanel'
 import Tip from '../components/Tip'
 import Ipv6Panel from '../components/Ipv6Panel'
 import HostSendTip from '../components/HostSendTip'
-import NetDetect from '../components/NetDetect'
 import DmarcHelp from '../components/DmarcHelp'
+import HostnameCheck from '../components/HostnameCheck'
 import Domains from './Domains'
-import { mergeLines } from '../lib'
 
 const stepLabels: Record<string, string> = {
   nome: 'Nome', fuso: 'Fuso horário', impl: 'Implantação', central: 'Servidor central',
@@ -56,23 +55,37 @@ export default function Wizard({ first }: { first: boolean }) {
   }
   const set = (k: string, v: unknown) => setVals({ ...vals, [k]: v })
   const auth = String(vals.auth_mode ?? 'local')
-  const blocked = cur === 'modo' && String(vals.mta_hostname ?? '').trim() === ''
+  // No modo Relay SMTP, o hostname precisa ser verificado (botão "Verificar hostname") antes de avançar.
+  const hostNorm = String(vals.mta_hostname ?? '').trim().toLowerCase().replace(/\.$/, '')
+  const [verifiedHost, setVerifiedHost] = useState('')
+  const blockedNoHost = cur === 'modo' && hostNorm === ''
+  const blocked = cur === 'modo' && (blockedNoHost || (mode === 'relay' && verifiedHost !== hostNorm))
 
   const [domVer, setDomVer] = useState(0)
-  const saveEntrega = async () => {
-    setBusy(true)
-    setErr('')
-    try {
-      const body: Vals = {}
-      for (const k of ['mta_hostname', 'dkim_selector', 'public_ips', 'dmarc_policy', 'dmarc_rua']) body[k] = vals[k]
-      await api('/api/admin/settings', { method: 'PUT', body })
-      setDomVer((n) => n + 1)
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
+  // Política e e-mail DMARC são salvos sozinhos, com um pequeno atraso após a última alteração.
+  const [dmarcStatus, setDmarcStatus] = useState('')
+  const dmarcKey = `${String(vals.dmarc_policy ?? '')}|${String(vals.dmarc_rua ?? '').trim()}`
+  const dmarcSaved = useRef<string | null>(null)
+  useEffect(() => {
+    if (cur !== 'entrega') return
+    if (dmarcSaved.current === null) { dmarcSaved.current = dmarcKey; return }
+    if (dmarcKey === dmarcSaved.current) return
+    const rua = String(vals.dmarc_rua ?? '').trim()
+    if (rua !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rua)) { setDmarcStatus('Informe um e-mail válido para salvar'); return }
+    const t = setTimeout(async () => {
+      setDmarcStatus('Salvando…')
+      try {
+        await api('/api/admin/settings', { method: 'PUT', body: { dmarc_policy: vals.dmarc_policy, dmarc_rua: rua } })
+        dmarcSaved.current = dmarcKey
+        setDmarcStatus('Salvo ✓')
+        setDomVer((n) => n + 1)
+      } catch (e) {
+        setDmarcStatus('')
+        setErr((e as Error).message)
+      }
+    }, 700)
+    return () => clearTimeout(t)
+  }, [cur, dmarcKey])
 
   const finish = async () => {
     setBusy(true)
@@ -100,7 +113,7 @@ export default function Wizard({ first }: { first: boolean }) {
     ['Modo', mode === 'relay' ? 'Relay SMTP (entrega direta)' : `Smarthost (${vals.smarthost_host || '—'}:${vals.smarthost_port})`],
     ['Hostname do relay', String(vals.mta_hostname || '(do container)')],
     ...(mode === 'relay' ? [['Seletor DKIM / DMARC', `${vals.dkim_selector} / ${vals.dmarc_policy}`] as [string, string]] : []),
-    ['Redes autorizadas', `${String(vals.relay_nets ?? '').split('\n').filter((l) => l.trim()).length} na lista${vals.relay_nets_auto === true ? ' + detecção automática' : ''}`],
+    ['Redes autorizadas', `${String(vals.relay_nets ?? '').split('\n').filter((l) => l.trim()).length} na lista (redes Docker entram automaticamente)`],
     ['Autenticação do painel', auth === 'ldap' ? `LDAP/AD (${vals.ldap_host || '—'})` : 'Local'],
     ['Retenção no banco', `${vals.db_retention_days} dias`],
     ['Rotação do log Exim', `${vals.log_rotate_mb} MB, ${vals.log_keep_files} arquivos`],
@@ -210,18 +223,18 @@ export default function Wizard({ first }: { first: boolean }) {
                   {F('mta_hostname')}{F('max_message_mb')}
                   {mode === 'smarthost' && <>{F('smarthost_host')}{F('smarthost_port')}{F('smarthost_tls')}{F('smarthost_user')}{F('smarthost_pass')}</>}
                 </div>
+                <HostnameCheck hostname={String(vals.mta_hostname ?? '')} mode={mode} onNets={(l) => setVals((v) => ({ ...v, relay_nets: l }))} onVerified={setVerifiedHost} />
               </>
             )}
 
             {cur === 'redes' && (
               <>
                 <Tip title="Quem pode enviar e-mails por este relay?">
-                  Liste os IPs e redes autorizados. O sistema já detecta a rede Docker em que está e a inclui automaticamente; você só precisa adicionar as demais redes (a LAN da empresa, outros servidores) e os IPs da própria máquina.
+                  Liste os IPs e redes autorizados. As redes Docker do servidor já entram automaticamente; adicione aqui a LAN da empresa, outros servidores e os IPs que precisarem enviar.
                 </Tip>
                 <div className="form-grid">
-                  {F('relay_nets')}{F('relay_nets_auto')}{F('ip_mode')}
+                  {F('relay_nets')}{F('ip_mode')}
                 </div>
-                <NetDetect autoAdd current={String(vals.relay_nets ?? '')} auto={vals.relay_nets_auto === true} version={0} onAdd={(l) => setVals((v) => ({ ...v, relay_nets: mergeLines(String(v.relay_nets ?? ''), l) }))} />
                 <HostSendTip />
                 {vals.ip_mode === 'dual' && <Ipv6Panel />}
               </>
@@ -230,16 +243,13 @@ export default function Wizard({ first }: { first: boolean }) {
             {cur === 'entrega' && (
               <>
                 <Tip title="Entrega direta: IPs, DKIM e DNS">
-                  No modo Relay SMTP o destinatário confere se o seu domínio autoriza este servidor. Informe os <b>IPs públicos de saída</b> (para o SPF), escolha o <b>seletor DKIM</b> e a política DMARC, cadastre os domínios (a chave DKIM é criada junto) e publique os registros TXT no DNS de cada domínio.
+                  No modo Relay SMTP o destinatário confere se o seu domínio autoriza este servidor. Escolha o <b>seletor DKIM</b> e a política DMARC (salva sozinha), cadastre os domínios (a chave DKIM é criada junto) e publique os registros TXT no DNS de cada domínio.
                 </Tip>
                 <div className="form-grid">
-                  {F('dkim_selector')}{F('public_ips')}{F('dmarc_policy')}{F('dmarc_rua')}
+                  {F('dkim_selector')}{F('dmarc_policy')}{F('dmarc_rua')}
                   <DmarcHelp value={String(vals.dmarc_policy ?? 'none')} />
                 </div>
-                <div className="row">
-                  <button type="button" onClick={saveEntrega} disabled={busy}>{busy ? 'Salvando…' : '↻ Salvar e atualizar os registros'}</button>
-                  <span className="help">Os registros abaixo usam as configurações salvas.</span>
-                </div>
+                {dmarcStatus && <span className="help">{dmarcStatus}</span>}
                 <Domains embedded selector={String(vals.dkim_selector ?? '')} version={domVer} />
               </>
             )}
@@ -292,7 +302,7 @@ export default function Wizard({ first }: { first: boolean }) {
                 {!first && <button onClick={() => nav('/admin/configuracoes')}>Cancelar</button>}
               </div>
               {step < steps.length - 1
-                ? <button className="primary" disabled={blocked} title={blocked ? 'Preencha o hostname do relay' : undefined} onClick={() => setStep(step + 1)}>Avançar →</button>
+                ? <button className="primary" disabled={blocked} title={blocked ? (blockedNoHost ? 'Preencha o hostname do relay' : 'Clique em "Verificar hostname" antes de avançar') : undefined} onClick={() => setStep(step + 1)}>Avançar →</button>
                 : <button className="primary" disabled={busy} onClick={finish}>{busy ? 'Salvando…' : 'Concluir e aplicar'}</button>}
             </div>
           </div>

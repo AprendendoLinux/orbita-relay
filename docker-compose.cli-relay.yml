@@ -25,7 +25,7 @@ name: orbitarelay-cli
 
 services:
   orbitarelay-cli:
-    image: ghcr.io/aprendendolinux/orbita-relay-cli:1.6.5
+    image: ghcr.io/aprendendolinux/orbita-relay-cli:latest
     container_name: orbitarelay-cli
     hostname: relay-filial
     restart: unless-stopped
