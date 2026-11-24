@@ -101,27 +101,43 @@ func outbound6(ctx context.Context) (bool, string) {
 	return false, last.Error()
 }
 
+// maskedWindow é o período considerado para as recusas por origem mascarada.
+const maskedWindow = 7 * 24 * time.Hour
+
+// countMaskedLines conta as linhas do log do Exim com a recusa do gateway Docker
+// ocorridas desde "since". A data vem do início de cada linha.
+func countMaskedLines(r io.Reader, since time.Time) (int, string) {
+	n, last := 0, ""
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64*1024), 1<<20)
+	for sc.Scan() {
+		l := sc.Text()
+		if !strings.Contains(l, gatewayMarker) || !strings.Contains(l, "rejected") || len(l) < 25 {
+			continue
+		}
+		at, err := time.Parse("2006-01-02 15:04:05 -0700", l[:25])
+		if err != nil || at.Before(since) {
+			continue
+		}
+		n++
+		last = l[:19]
+	}
+	return n, last
+}
+
 func (a *App) maskedCount(ctx context.Context, gws []string) (int, string) {
 	if len(gws) == 0 {
 		return 0, ""
 	}
 	n, last := 0, ""
+	since := time.Now().Add(-maskedWindow)
 	f, err := os.Open(filepath.Join(a.logDir, "main.log"))
 	if err == nil {
 		defer f.Close()
 		if fi, err := f.Stat(); err == nil && fi.Size() > 4<<20 {
 			_, _ = f.Seek(fi.Size()-4<<20, io.SeekStart)
 		}
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 64*1024), 1<<20)
-		for sc.Scan() {
-			if l := sc.Text(); strings.Contains(l, gatewayMarker) && strings.Contains(l, "rejected") {
-				n++
-				if len(l) >= 19 {
-					last = l[:19]
-				}
-			}
-		}
+		n, last = countMaskedLines(f, since)
 	}
 	if a.ready() {
 		ph := strings.TrimSuffix(strings.Repeat("?,", len(gws)), ",")
@@ -157,7 +173,7 @@ func (a *App) handleIPv6Status(w http.ResponseWriter, r *http.Request) {
 		issues = append(issues, "Sem saída IPv6 para a internet. O host precisa ter IPv6 global e o Docker precisa fazer NAT66 (ip6tables).")
 	}
 	if masked > 0 {
-		issues = append(issues, fmt.Sprintf("%d conexão(ões) chegaram com o IP do gateway do Docker (IP de origem mascarado) e foram recusadas por segurança. Isso ocorre quando a publicação de portas IPv6 passa pelo docker-proxy; habilite o ip6tables.", masked))
+		issues = append(issues, fmt.Sprintf("%d conexão(ões) chegaram com o IP do gateway do Docker (IP de origem mascarado) e foram recusadas por segurança. Isso acontece quando um cliente do próprio servidor envia pela porta publicada e o Docker troca o IP de origem pelo do gateway. Envie pelo IP público da máquina ou de um contêiner na rede do relay. A contagem considera os últimos 7 dias.", masked))
 	}
 	level := "ok"
 	if len(issues) > 0 {
